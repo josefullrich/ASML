@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Die yield: count-distribution comparison</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{--bg:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#8a8984;--line:#e4e3dd;--grid:#efeee9;--chip:#f3f2ee;--on:#0b0b0b;--on-ink:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#8f8e88;--line:#383835;--grid:#2a2a28;--chip:#262624;--on:#f0efec;--on-ink:#0d0d0d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1280px;margin:0 auto;padding:20px 24px 60px}
+h1{font-size:22px;font-weight:600;margin:0 0 4px}
+h2{font-size:17px;font-weight:600;margin:30px 0 4px}
+.sub{color:var(--ink2);margin:0 0 10px;font-size:13px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:10px 0}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 0}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:3px 0}
+.lab{font-size:12px;color:var(--muted);width:74px;flex:none}
+.chip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:2px 10px 2px 8px;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;user-select:none}
+.chip.off{opacity:.4}
+.chip.on{background:var(--on);color:var(--on-ink);border-color:var(--on)}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block;flex:none}
+select{font:inherit;font-size:13px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink)}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{color:var(--ink2);font-weight:600;cursor:pointer;user-select:none;vertical-align:bottom}
+th .d{display:block;font-weight:400;color:var(--muted);font-size:10.5px}
+td:first-child,th:first-child{text-align:left}
+td.best{font-weight:700}
+tr.fix td:first-child{padding-left:22px}
+tbody tr:hover{background:rgba(127,127,127,.08)}
+.pm{color:var(--muted);font-size:11px}
+.plot{width:100%;height:380px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px}
+.note{color:var(--ink2);font-size:12.5px}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:13px;margin:0}
+dt{font-weight:600}dd{margin:0;color:var(--ink2)}
+code{font-size:12px;background:var(--grid);padding:0 4px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="bar"><main style="padding:0 24px">
+  <div class="row"><span class="lab">Models</span><span id="models" class="row"></span></div>
+  <div class="row"><span class="lab">Context</span><span id="arms" class="row"></span>
+    <span class="note" style="font-size:11.5px">GPs never use context and show whenever their model is on</span></div>
+  <div class="row"><span class="lab">Scope</span><span id="scope" class="row"></span>
+    <span class="lab" style="width:auto;margin-left:14px">Dataset</span><select id="ds"></select>
+    <span class="lab" style="width:auto;margin-left:14px">Quick</span><span id="presets" class="row"></span></div>
+</main></div>
+<main>
+<h1 id="title"></h1>
+<p class="sub" id="meta"></p>
+<div class="card note">
+  Every model's one-step-ahead prediction is scored as what it really is: a probability for each count <b>k = 0…70</b>
+  good dies. All configs predict the same quantity on the same rows, so the numbers are compared <b>raw, with no
+  normalization</b>. Regressors on the logit target are binned at the midpoints between the 71 possible values; the GP
+  Laplace predictive (latent yield, no counting noise) becomes a binomial mixture; the Causilo classifier's p becomes
+  Binomial(70, p), and the indented rows are the fixes we tried on those same p's — fitted on the config's own
+  <i>earlier</i> predictions that day (raw binomial for the first <span id="minfit"></span> steps).
+</div>
+
+<h2>Leaderboard</h2>
+<p class="sub">Mean over datasets ± standard error across datasets (or the single dataset chosen above). Bold = best among shown. Click a header to sort.</p>
+<div class="card" style="overflow-x:auto"><table id="board"></table></div>
+
+<h2>Compare one metric</h2>
+<div class="row"><select id="barMetric"></select><span class="note" id="barDir"></span></div>
+<div class="card"><div id="pBar" class="plot"></div></div>
+
+<h2>Confidence at every level (PIT coverage)</h2>
+<p class="sub">Asked-for level vs how often the truth landed inside it. On the diagonal = honest; below = overconfident (too narrow), above = too cautious. One panel per context arm; the GPs (dashed) are in every panel. Switch to the interval version to see the endpoint bias of plain count intervals.</p>
+<div class="row"><span id="covKind" class="row"></span></div>
+<div class="grid3" id="covPanels"></div>
+
+<h2>What the fixes learned: Platt a, b and beta-binomial φ</h2>
+<p class="sub">Fitted at every step on the earlier predictions (mean over the chosen datasets). <b>a</b> &gt; 1 sharpens the classifier's logit, &lt; 1 softens it; <b>b</b> shifts it (b &gt; 0 = raises p). <b>φ</b> is the beta-binomial concentration: large φ ≈ plain binomial, φ ≲ 2 = U-shaped (mass piles on 0/70 and 70/70). φ is on a log axis.</p>
+<div class="grid3">
+  <div class="card"><div id="pA" class="plot" style="height:440px"></div></div>
+  <div class="card"><div id="pB" class="plot" style="height:440px"></div></div>
+  <div class="card"><div id="pPhi" class="plot" style="height:440px"></div></div>
+</div>
+
+<h2>Metrics</h2>
+<div class="card"><dl>
+  <dt>Log score</dt><dd>−log P(the count that happened). The sharpest honest test: putting near-zero probability on what happened is punished hard. Lower is better.</dd>
+  <dt>Log score − entropy</dt><dd>The log score minus the binomial entropy at the observed count: the log score a model that knew the true yield would still average, because of counting noise alone. 0 = as good as physics allows. Same ranking as the log score (the floor is the same for every model on the same rows); it shows the room left.</dd>
+  <dt>CRPS</dt><dd>Σₖ (F(k) − 1[k ≥ k<sub>true</sub>])², in counts. Rewards putting probability near the truth, not just on it. Lower is better.</dd>
+  <dt>Coverage 90% (PIT)</dt><dd>Share of the truth's probability-integral transform inside the central 90%. For counts the PIT is spread uniformly over [F(k−1), F(k)] (computed exactly, no random draw), so a calibrated model scores exactly 0.90. Target 0.90.</dd>
+  <dt>Coverage 90% (interval)</dt><dd>Share of truths inside the central 90% count interval, endpoints included. Every model reads high on counts because the endpoint bins (the spikes at 0/70 and 70/70) carry extra mass, so it's shown for reference only.</dd>
+  <dt>Coverage error</dt><dd>Mean |PIT coverage − level| over 10, 20 … 99%: the whole confidence curve in one number. Lower is better.</dd>
+  <dt>Overdispersion</dt><dd>Σ deviance / Σ expected deviance, using the predicted <i>mean</i> yield. 1 = the misses are pure counting luck; much above 1 = the yield swings far more than a binomial with that mean allows. It judges the mean only, so the beta-binomial fix (which keeps the mean) leaves it unchanged — that is expected, not a bug; it is why the fix is needed.</dd>
+</dl></div>
+</main>
+
+<script>
+const D = /*__DATA__*/null;
+const METRICS = {
+  nll:      {label: "Log score",            d: "lower is better", dir: -1, f: 3},
+  excess:   {label: "Log score − entropy",  d: "lower; 0 = noise floor", dir: -1, f: 3},
+  crps:     {label: "CRPS (counts)",        d: "lower is better", dir: -1, f: 3},
+  cov90:    {label: "Coverage 90% (PIT)",   d: "target 0.90", dir: 0, target: 0.9, f: 3},
+  cov_err:  {label: "Coverage error",       d: "mean |cov − level|, lower", dir: -1, f: 3},
+  cov90_int:{label: "Coverage 90% (interval)", d: "target 0.90, biased high", dir: 0, target: 0.9, f: 3},
+  overdisp: {label: "Overdispersion",       d: "target 1", dir: 0, target: 1, log: true, f: 2},
+};
+const MK = Object.keys(METRICS);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const CFG = Object.fromEntries(D.configs.map(c => [c.id, c]));
+const MODELS = []; for (const c of D.configs) if (!MODELS.find(m => m.id === c.model)) MODELS.push({id: c.model, label: c.label, color: c.color});
+const ARM_DASH = {none: "dash", ctx0: "solid", ctx5: "dot", ctxall: "longdashdot"};
+const ARM_LABEL = {ctx0: "ctx0 (zero-shot)", ctx5: "ctx5 (5 days)", ctxall: "ctxall (all days)"};
+const st = {models: new Set(MODELS.map(m => m.id)), arms: new Set(D.arms), scope: "all", ds: "mean", sort: "nll", asc: true, bar: "nll", covKind: "cov_curve"};
+const isFix = id => /_(bb|calib|calib_bb)_/.test(id);
+const shown = () => D.configs.filter(c => st.models.has(c.model) && (c.arm === "none" || st.arms.has(c.arm))).map(c => c.id);
+const dsList = () => st.ds === "mean" ? D.datasets : [st.ds];
+function bad(k, v) { const M = METRICS[k]; if (v == null || !isFinite(v)) return Infinity; if (M.dir === 0) return M.log ? Math.abs(Math.log(v / M.target)) : Math.abs(v - M.target); return -M.dir * v; }
+function stat(id, k) {   // mean and SE over the chosen datasets
+  const v = dsList().map(d => (D.per[st.scope][id] || {})[d]).filter(x => x).map(x => x[k]).filter(x => x != null && isFinite(x));
+  if (!v.length) return [NaN, NaN, 0];
+  const m = v.reduce((a, b) => a + b, 0) / v.length;
+  const se = v.length > 1 ? Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / (v.length - 1) / v.length) : NaN;
+  return [m, se, v.length]; }
+function curve(id, key) { const L = D.levels.length, v = dsList().map(d => (D.per[st.scope][id] || {})[d]).filter(x => x);
+  if (!v.length) return null; return Array.from({length: L}, (_, j) => v.reduce((a, x) => a + x[key][j], 0) / v.length); }
+const el = (t, a = {}, kids = []) => { const e = document.createElement(t); for (const [k, v] of Object.entries(a)) { if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (k === "html") e.innerHTML = v; else e.setAttribute(k, v); } for (const c of [].concat(kids)) if (c != null) e.append(c); return e; };
+const lay = x => Object.assign({paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", font: {color: css("--ink2"), size: 12},
+  margin: {l: 56, r: 16, t: 30, b: 46}, hovermode: "closest", legend: {orientation: "h", y: -0.25, font: {size: 11}},
+  xaxis: {gridcolor: css("--grid"), zeroline: false}, yaxis: {gridcolor: css("--grid"), zeroline: false}}, x || {});
+const pc = {displaylogo: false, responsive: true};
+
+function controls() {
+  const M = document.getElementById("models"); M.innerHTML = "";
+  for (const m of MODELS) M.append(el("span", {class: "chip" + (st.models.has(m.id) ? "" : " off"), title: "click toggle · double-click only this",
+    onclick: () => { st.models.has(m.id) ? st.models.delete(m.id) : st.models.add(m.id); render(); }, ondblclick: () => { st.models = new Set([m.id]); render(); }},
+    [el("span", {class: "sw", style: `background:${m.color}`}), m.label]));
+  const A = document.getElementById("arms"); A.innerHTML = "";
+  for (const a of D.arms) A.append(el("span", {class: "chip" + (st.arms.has(a) ? "" : " off"), onclick: () => { st.arms.has(a) ? st.arms.delete(a) : st.arms.add(a); render(); },
+    ondblclick: () => { st.arms = new Set([a]); render(); }}, ARM_LABEL[a]));
+  const S = document.getElementById("scope"); S.innerHTML = "";
+  for (const [k, l] of [["all", "whole run"], ["last20", "last 20%"]]) S.append(el("span", {class: "chip" + (st.scope === k ? " on" : ""), onclick: () => { st.scope = k; render(); }}, l));
+  const P = document.getElementById("presets"); P.innerHTML = "";
+  const all = MODELS.map(m => m.id), clf = all.filter(m => m.startsWith("causilo_trials"));
+  for (const [n, f] of [["all", () => { st.models = new Set(all); st.arms = new Set(D.arms); }],
+                        ["classifier fixes", () => { st.models = new Set([...clf, "causilo", "gpr_laplace"].filter(x => all.includes(x))); }],
+                        ["regressors vs GPs", () => { st.models = new Set(all.filter(m => !m.startsWith("causilo_trials"))); }]])
+    P.append(el("span", {class: "chip", onclick: () => { f(); render(); }}, n));
+  const C = document.getElementById("covKind"); C.innerHTML = "";
+  for (const [k, l] of [["cov_curve", "PIT coverage (honest for counts)"], ["covi_curve", "count-interval coverage (biased high)"]])
+    C.append(el("span", {class: "chip" + (st.covKind === k ? " on" : ""), onclick: () => { st.covKind = k; render(); }}, l));
+}
+
+function board() {
+  const ids = shown(), T = document.getElementById("board");
+  if (!ids.length) { T.innerHTML = "<tr><td>nothing selected</td></tr>"; return; }
+  const S = Object.fromEntries(ids.map(id => [id, Object.fromEntries(MK.map(k => [k, stat(id, k)]))]));
+  ids.sort((a, b) => { const x = st.sort === "name" ? CFG[a].label : bad(st.sort, S[a][st.sort][0]), y = st.sort === "name" ? CFG[b].label : bad(st.sort, S[b][st.sort][0]);
+    return (x > y ? 1 : x < y ? -1 : 0) * (st.asc ? 1 : -1); });
+  const best = Object.fromEntries(MK.map(k => [k, Math.min(...ids.map(id => bad(k, S[id][k][0])))]));
+  const head = `<tr><th data-k="name">config</th>` + MK.map(k => `<th data-k="${k}">${METRICS[k].label}${st.sort === k ? (st.asc ? " ▲" : " ▼") : ""}<span class="d">${METRICS[k].d}</span></th>`).join("") + "</tr>";
+  const body = ids.map(id => { const c = CFG[id];
+    return `<tr class="${isFix(id) ? "fix" : ""}"><td><span class="sw" style="background:${c.color};margin-right:7px"></span>${c.label}${c.arm !== "none" ? ` <span class="pm">${c.arm}</span>` : ""}</td>` +
+      MK.map(k => { const [m, se] = S[id][k]; return `<td class="${bad(k, m) === best[k] ? "best" : ""}">${isFinite(m) ? m.toFixed(METRICS[k].f) : "–"} <span class="pm">${isFinite(se) ? "±" + se.toFixed(METRICS[k].f) : ""}</span></td>`; }).join("") + "</tr>"; }).join("");
+  T.innerHTML = head + body;
+  T.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => { const k = th.dataset.k; st.asc = st.sort === k ? !st.asc : true; st.sort = k; board(); });
+}
+
+function bars() {
+  const S = document.getElementById("barMetric");
+  if (!S.options.length) { for (const k of MK) S.append(el("option", {value: k}, METRICS[k].label)); S.onchange = () => { st.bar = S.value; bars(); }; }
+  S.value = st.bar; const k = st.bar, M = METRICS[k];
+  const ids = shown().map(id => [id, stat(id, k)]).filter(x => isFinite(x[1][0])).sort((a, b) => bad(k, a[1][0]) - bad(k, b[1][0]));
+  document.getElementById("barDir").textContent = M.d + " · sorted best to worst · error bar = ±1 SE over datasets";
+  const tr = [{type: "bar", orientation: "h", y: ids.map(x => CFG[x[0]].label + " · " + CFG[x[0]].arm), x: ids.map(x => x[1][0]),
+    error_x: {type: "data", array: ids.map(x => isFinite(x[1][1]) ? x[1][1] : 0), color: css("--ink2"), thickness: 1},
+    marker: {color: ids.map(x => CFG[x[0]].color)}, hovertemplate: "%{y}: %{x:.4f}<extra></extra>"}];
+  const shapes = M.dir === 0 ? [{type: "line", x0: M.target, x1: M.target, yref: "paper", y0: 0, y1: 1, line: {dash: "dash", color: css("--ink2"), width: 1}}] : [];
+  Plotly.react("pBar", tr, lay({height: Math.max(300, 22 * ids.length + 80), margin: {l: 330, r: 30, t: 10, b: 40}, shapes,
+    yaxis: {autorange: "reversed", gridcolor: css("--grid")}, xaxis: {type: M.log ? "log" : "linear", gridcolor: css("--grid")}}), pc);
+  document.getElementById("pBar").style.height = Math.max(300, 22 * ids.length + 80) + "px";
+}
+
+function covPanels() {
+  const G = document.getElementById("covPanels"); G.innerHTML = "";
+  const ids = shown(), gps = ids.filter(id => CFG[id].arm === "none"), arms = D.arms.filter(a => st.arms.has(a));
+  for (const a of (arms.length ? arms : ["none"])) {
+    const box = el("div", {class: "plot", style: "height:600px"}); G.append(el("div", {class: "card"}, [box]));
+    const set = gps.concat(ids.filter(id => CFG[id].arm === a));
+    const tr = set.map(id => { const y = curve(id, st.covKind); if (!y) return null; const err = y.reduce((s, v, j) => s + Math.abs(v - D.levels[j]), 0) / y.length;
+      return {x: D.levels, y, mode: "lines+markers", name: `${CFG[id].label} (${err.toFixed(3)})`,
+        line: {color: CFG[id].color, dash: CFG[id].arm === "none" ? "dash" : (isFix(id) ? "dot" : "solid"), width: 2}, marker: {size: 5, color: CFG[id].color},
+        hovertemplate: `${CFG[id].label}<br>asked %{x}: got %{y:.3f}<extra></extra>`}; }).filter(x => x);
+    tr.push({x: [0, 1], y: [0, 1], mode: "lines", line: {dash: "dash", color: css("--ink2"), width: 1}, showlegend: false, hoverinfo: "skip"});
+    Plotly.react(box, tr, lay({title: {text: a === "none" ? "GPs" : ARM_LABEL[a], font: {size: 13}}, xaxis: {title: "asked-for level", range: [0, 1], gridcolor: css("--grid")},
+      yaxis: {title: "observed", range: [0, 1], gridcolor: css("--grid")}, legend: {orientation: "h", y: -0.16, yanchor: "top", font: {size: 10}}}), pc);
+  }
+}
+
+function params() {
+  const ids = shown().filter(id => D.params[id]);
+  const mk = (key, div, title, log) => {
+    const tr = ids.map(id => { const per = dsList().map(d => D.params[id][d]).filter(x => x); if (!per.length) return null;
+      const it = per[0].iter, n = Math.min(...per.map(p => p.iter.length));
+      const y = Array.from({length: n}, (_, i) => { const v = per.map(p => p[key][i]).filter(x => x != null && isFinite(x)); return v.length ? (log ? Math.exp(v.reduce((a, b) => a + Math.log(b), 0) / v.length) : v.reduce((a, b) => a + b, 0) / v.length) : null; });
+      if (y.every(v => v == null || (key === "a" && v === 1) || (key === "b" && v === 0))) return null;
+      return {x: it.slice(0, n), y, mode: "lines", name: CFG[id].label + " · " + CFG[id].arm, line: {color: CFG[id].color, width: 1.8, dash: CFG[id].arm === "ctx0" ? "solid" : CFG[id].arm === "ctx5" ? "dot" : "longdashdot"}}; }).filter(x => x);
+    Plotly.react(div, tr, lay({title: {text: title, font: {size: 13}}, xaxis: {title: "iteration", gridcolor: css("--grid")},
+      yaxis: log ? {type: "log", tickvals: [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100, 1000], gridcolor: css("--grid")} : {gridcolor: css("--grid")}, legend: {orientation: "h", y: -0.22, yanchor: "top", font: {size: 10}}}), pc); };
+  mk("a", "pA", "Platt slope a", false); mk("b", "pB", "Platt shift b", false); mk("phi", "pPhi", "beta-binomial φ (geometric mean)", true);
+}
+
+function render() { controls(); board(); bars(); covPanels(); params(); }
+document.getElementById("title").textContent = D.title;
+document.getElementById("minfit").textContent = D.minFit;
+document.getElementById("meta").textContent = `${D.datasets.length} datasets · ${D.configs.length} configs · one-step-ahead · probability floor ${D.eps} · generated ${D.generated}`;
+const DS = document.getElementById("ds"); DS.append(el("option", {value: "mean"}, `mean over all ${D.datasets.length}`));
+for (const d of D.datasets) DS.append(el("option", {value: d}, d)); DS.onchange = () => { st.ds = DS.value; render(); };
+render();
+</script>
+</body>
+</html>

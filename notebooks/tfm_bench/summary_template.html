@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Surrogate Benchmark</title>
+<style>
+:root{--bg:#fcfcfb;--panel:#ffffff;--ink:#0b0b0b;--ink2:#52514e;--muted:#8a8984;--line:#e6e5e1;--grid:#efeee9;
+  --chip:#f3f2ee;--chip-on:#0b0b0b;--chip-on-ink:#ffffff;--shade:rgba(0,0,0,.045);--hl:#fff7d6}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141413;--panel:#1c1c1a;--ink:#f2f1ed;--ink2:#b9b8b2;
+  --muted:#85847e;--line:#2e2e2b;--grid:#262624;--chip:#262624;--chip-on:#f2f1ed;--chip-on-ink:#141413;--shade:rgba(255,255,255,.05);--hl:#3a3520}}
+:root[data-theme="dark"]{--bg:#141413;--panel:#1c1c1a;--ink:#f2f1ed;--ink2:#b9b8b2;--muted:#85847e;--line:#2e2e2b;--grid:#262624;
+  --chip:#262624;--chip-on:#f2f1ed;--chip-on-ink:#141413;--shade:rgba(255,255,255,.05);--hl:#3a3520}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1240px;margin:0 auto;padding:0 16px 48px}
+h1{font-size:22px;margin:20px 0 4px}h2{font-size:17px;margin:32px 0 8px}h3{font-size:14px;margin:18px 0 6px;color:var(--ink2)}
+.note{color:var(--ink2);font-size:13px;margin:0 0 8px}
+/* filter bar */
+.bar{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 0 8px}
+.bar-inner{max-width:1240px;margin:0 auto;padding:0 16px;display:flex;flex-direction:column;gap:6px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.lab{font-size:12px;color:var(--muted);width:64px;flex:none}
+.chip{white-space:nowrap;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:3px 10px 3px 8px;font-size:12.5px;
+  cursor:pointer;display:inline-flex;align-items:center;gap:6px;user-select:none;line-height:1.4}
+.chip:hover{border-color:var(--ink2)}
+.chip.off{opacity:.45}
+.chip .sw{width:10px;height:10px;border-radius:3px;flex:none}
+.chip.preset{padding:3px 10px;background:transparent}
+.chip.on-dark{background:var(--chip-on);color:var(--chip-on-ink);border-color:var(--chip-on)}
+.count{font-size:12px;color:var(--muted);margin-left:auto}
+@media (max-width:700px){.bar{position:static}}
+.hint{font-size:11.5px;color:var(--muted)}
+/* tabs + controls */
+.tabs{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:4px 0 8px}
+.tabs button{border:0;background:transparent;color:var(--ink2);padding:5px 12px;font:inherit;font-size:13px;cursor:pointer}
+.tabs button.on{background:var(--chip-on);color:var(--chip-on-ink)}
+select{font:inherit;font-size:13px;padding:4px 8px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+/* tables */
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
+table{border-collapse:collapse;font-size:12.5px;width:100%}
+th,td{padding:5px 9px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+th{color:var(--ink2);font-weight:600;cursor:pointer;position:sticky;top:0;background:var(--panel)}
+th:hover{color:var(--ink)}
+td:first-child,th:first-child{text-align:left}
+tbody tr:hover{background:var(--hl)}
+td.best{font-weight:700}
+.fname{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.dir{font-weight:400;color:var(--muted);font-size:10.5px;display:block}
+/* charts */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(520px,1fr));gap:14px}
+@media (max-width:600px){.grid{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px 6px;position:relative}
+.card h4{margin:0 0 2px;font-size:13.5px}.card .sub{font-size:11.5px;color:var(--muted);margin-bottom:4px}
+svg{overflow:visible}
+.card svg{display:block;width:100%}
+.chip svg,.lg svg,.fname svg{flex:none;display:inline-block}
+svg text{fill:var(--ink2);font-size:10.5px}
+.axis line,.axis path{stroke:var(--line)}
+.gridl{stroke:var(--grid)}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;margin:6px 0 10px}
+.lg{display:inline-flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--ink)}
+.lg svg{width:26px;height:10px}
+.tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;
+  font-size:11.5px;box-shadow:0 4px 14px rgba(0,0,0,.12);z-index:5;min-width:170px;display:none}
+.tip .t{color:var(--muted);margin-bottom:3px}.tip .r{display:flex;align-items:center;gap:6px;justify-content:space-between}
+.tip .r span:first-child{display:inline-flex;align-items:center;gap:5px}
+img.static{max-width:100%;border:1px solid var(--line);border-radius:8px;margin:6px 0 14px;background:#fff}
+.empty{color:var(--muted);font-size:13px;padding:12px}
+.more{margin:8px 0;font:inherit;font-size:12.5px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--ink);cursor:pointer}
+</style>
+</head>
+<body>
+<div class="bar"><div class="bar-inner">
+  <div class="row"><span class="lab">Models</span><span id="models" class="row"></span></div>
+  <div class="row"><span class="lab">Context</span><span id="arms" class="row"></span>
+    <span class="hint">GPs never use context and show whenever their model is on</span></div>
+  <div class="row"><span class="lab">Quick</span><span id="presets" class="row"></span><span class="count" id="count"></span></div>
+  <div class="hint">Click a chip to toggle · <b>double-click</b> a model chip to show only that model · click a name in a legend or table to solo it · hover to highlight</div>
+</div></div>
+<main>
+  <h1 id="title"></h1>
+  <p class="note" id="note"></p>
+
+  <h2>Rankings</h2>
+  <div class="tabs" id="scopeTabs"></div>
+  <div class="row" style="gap:10px;margin:2px 0 6px">
+    <span class="lab" style="width:auto">Normalization</span><select id="normSel"></select>
+    <span id="refWrap" class="row" style="gap:6px"><span class="lab" style="width:auto">reference</span><select id="refSel"></select></span>
+  </div>
+  <p class="note" id="normNote"></p>
+  <div class="row" style="margin:4px 0 2px"><span class="lab">Ranked on</span><span id="rankMetrics" class="row"></span></div>
+  <div class="row" style="margin:0 0 8px"><span class="lab"></span><span class="chip preset" id="rmDefault">default set</span><span class="chip preset" id="rmAll">all</span><span class="chip preset" id="rmNone">none</span>
+    <span class="hint">click a metric to add/remove it from the score · colour of the dot = category</span></div>
+  <p class="note">Score columns: per-dataset normalized badness (lower = better), averaged over the <span id="nCommon"></span> datasets every config has → over the ticked metrics in each category → over categories (overall).
+    The scale is set by <b>all</b> configs, so filtering doesn't change a score; <i>#</i>, P(#1) and the rank CI are among the configs <b>shown</b>. Bold = best among shown. Click a header to sort.</p>
+  <div class="tw" id="rankTable"></div>
+
+  <h2>Compare one metric</h2>
+  <div class="row" style="gap:10px"><select id="barMetric"></select><div class="tabs" id="barMode" style="margin:0"></div><span class="note" id="barDir" style="margin:0"></span></div>
+  <div class="card" style="margin-top:8px"><div id="bars"></div></div>
+
+  <section id="curvesSec">
+    <h2>Over the run (mean over datasets, ±1 SE band)</h2>
+    <p class="note">Shaded region = last 20% of the run. Per-step metrics are smoothed with a rolling mean. Hover a chart for exact values.</p>
+    <div class="legend" id="legend"></div>
+    <div class="grid" id="curves"></div>
+  </section>
+
+  <section id="relSec">
+    <h2>Reliability by amount of context (pooled over datasets)</h2>
+    <p class="note">One panel per context arm; the GPs (dashed) never use context, so they are the same reference in every panel. Closer to the diagonal is better. Above it on the left and below on the right = too confident; the reverse = too cautious; entirely above/below = biased. Legend numbers = mean |gap| to the diagonal, best first.</p>
+    <div class="grid" id="rel" style="grid-template-columns:repeat(auto-fill,minmax(330px,1fr))"></div>
+  </section>
+
+  <section id="ivSec">
+    <h2>Coverage &amp; width quality by amount of context</h2>
+    <p class="note"><b>Top:</b> observed coverage of each model's central intervals at 10–99% (diagonal = honest).
+      <b>Bottom:</b> width ratio = actual width ÷ the width this model <i>needed</i> for its own errors (log scale).
+      1 = exactly right; above 1 = wider than necessary; below 1 = too narrow. A model with big errors and big
+      intervals sits at 1 — it is not punished for being wide, only for being wrongly wide or narrow.
+      Legend numbers: coverage panels = mean |coverage − nominal|; width panels = width error (mean |log₂ ratio|; 1 = off by 2×). Uses the Whole run / Last 20% tab above.</p>
+    <div class="grid" id="ivCov" style="grid-template-columns:repeat(auto-fill,minmax(330px,1fr))"></div>
+    <div class="grid" id="ivW" style="grid-template-columns:repeat(auto-fill,minmax(330px,1fr));margin-top:14px"></div>
+  </section>
+
+  <section id="staticSec">
+    <h2>Static plots</h2>
+    <p class="note">These images were rendered before the interactive version existed, so the filters above don't apply to them. Re-run <code>plot_and_rank.py</code> (new version) to get interactive curves.</p>
+    <div id="static"></div>
+  </section>
+
+  <h2 id="flagTitle">Flagged big errors</h2>
+  <p class="note" id="flagNote"></p>
+  <div class="tw" id="flagTable"></div>
+  <button class="more" id="flagMore">Show more</button>
+</main>
+<div class="tip" id="tip"></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+/* ---------------- state ---------------- */
+const ARM_DASH = {none: "", ctx0: "", ctx5: "6 4", ctxall: "1.5 3"};
+const ARM_LABEL = {none: "no context", ctx0: "ctx0 (zero-shot)", ctx5: "ctx5 (5 days)", ctxall: "ctxall (all days)"};
+const MODEL = Object.fromEntries(DATA.models.map(m => [m.id, m]));
+const FOLDER = Object.fromEntries(DATA.folders.map(f => [f.id, f]));
+const state = {models: new Set(DATA.models.map(m => m.id)), arms: new Set(DATA.arms), scope: "all",
+  sort: {key: "overall", asc: true}, hover: null, barMetric: null, flagN: 200,
+  norm: DATA.norm.default, ref: DATA.norm.ref, rankOn: {}, barMode: "raw"};
+for (const sc of Object.keys(DATA.tables)) state.rankOn[sc] = new Set(DATA.tables[sc].ranked);
+if (!DATA.folders.some(f => f.id === state.ref)) state.ref = DATA.folders[0].id;
+try { const s = JSON.parse(localStorage.getItem("bench-sel") || "null");
+  if (s) { state.models = new Set(s.m.filter(x => MODEL[x])); state.arms = new Set(s.a.filter(x => DATA.arms.includes(x))); } } catch (e) {}
+const save = () => { try { localStorage.setItem("bench-sel", JSON.stringify({m: [...state.models], a: [...state.arms]})); } catch (e) {} };
+const visible = id => { const f = FOLDER[id]; return f && state.models.has(f.model) && (f.arm === "none" || state.arms.has(f.arm)); };
+const visFolders = () => DATA.folders.filter(f => visible(f.id)).map(f => f.id);
+const color = id => MODEL[FOLDER[id].model].color;
+const el = (tag, attrs = {}, kids = []) => { const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) { if (k === "style") e.style.cssText = v; else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k === "html") e.innerHTML = v; else e.setAttribute(k, v); }
+  for (const c of [].concat(kids)) if (c != null) e.append(c); return e; };
+const NS = "http://www.w3.org/2000/svg";
+const sv = (tag, attrs = {}) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); return e; };
+const fmt = v => (v == null || !isFinite(v)) ? "" : Math.abs(v) >= 100 ? v.toFixed(1) : Math.abs(v) >= 10 ? v.toFixed(2) : Math.abs(v) >= 1 ? v.toFixed(3) : v.toPrecision(3);
+
+function solo(id) { const f = FOLDER[id]; state.models = new Set([f.model]); if (f.arm !== "none") state.arms = new Set([f.arm]); changed(); }
+function setHover(id) { state.hover = id; document.querySelectorAll("[data-f]").forEach(n => {
+  const on = !id || n.dataset.f === id; n.style.opacity = on ? 1 : (n.dataset.kind === "band" ? 0.03 : 0.12);
+  if (n.dataset.kind === "line") n.setAttribute("stroke-width", id && n.dataset.f === id ? 3 : 1.7); }); }
+
+/* ---------------- metric helpers ---------------- */
+const MI = DATA.metricInfo;
+const goodness = (m, v) => { const d = (MI[m] || {}).dir; if (v == null || !isFinite(v)) return -Infinity;
+  if (d === "info") return -Infinity; if (d === "target1") return -Math.abs(Math.log2(Math.max(v, 1e-9))); if (d === "higher") return v; if (d === "target90") return -Math.abs(v - 0.9);
+  if (d === "target95") return -Math.abs(v - 0.95); if (d === "target125") return -Math.abs(v - 1.25); return -v; };
+const dirText = m => ({lower: "lower is better", higher: "higher is better", target90: "target 0.90", target95: "target 0.95",
+  target125: "target 1.25", target1: "target 1 (right width)", info: "noise floor, same for all"})[(MI[m] || {}).dir] || "";
+
+/* ---------------- filter bar ---------------- */
+function swatchLine(id, w = 26) { const s = sv("svg", {viewBox: `0 0 ${w} 10`, width: w, height: 10});
+  s.append(sv("line", {x1: 1, x2: w - 1, y1: 5, y2: 5, stroke: color(id), "stroke-width": 2.2, "stroke-dasharray": ARM_DASH[FOLDER[id].arm], "stroke-linecap": "round"})); return s; }
+function renderBar() {
+  const M = document.getElementById("models"); M.innerHTML = "";
+  for (const m of DATA.models) {
+    const c = el("span", {class: "chip" + (state.models.has(m.id) ? "" : " off"), title: "click: toggle · double-click: only this",
+      onclick: () => { state.models.has(m.id) ? state.models.delete(m.id) : state.models.add(m.id); changed(); },
+      ondblclick: () => { state.models = new Set([m.id]); changed(); }},
+      [el("span", {class: "sw", style: `background:${m.color}`}), m.label]);
+    M.append(c);
+  }
+  const A = document.getElementById("arms"); A.innerHTML = "";
+  for (const a of DATA.arms) {
+    const s = sv("svg", {viewBox: "0 0 22 10", width: 22, height: 10});
+    s.append(sv("line", {x1: 1, x2: 21, y1: 5, y2: 5, stroke: "currentColor", "stroke-width": 2, "stroke-dasharray": ARM_DASH[a]}));
+    A.append(el("span", {class: "chip" + (state.arms.has(a) ? "" : " off"),
+      onclick: () => { state.arms.has(a) ? state.arms.delete(a) : state.arms.add(a); changed(); },
+      ondblclick: () => { state.arms = new Set([a]); changed(); }}, [s, ARM_LABEL[a]]));
+  }
+  const P = document.getElementById("presets"); P.innerHTML = "";
+  const allM = DATA.models.map(m => m.id), gps = allM.filter(m => m.startsWith("gpr")), kumos = allM.filter(m => m.startsWith("kumo"));
+  const SCq = scoreFor(state.scope, null), ranked = DATA.folders.map(f => f.id).filter(f => isFinite(SCq[f].overall)).sort((a, b) => SCq[a].overall - SCq[b].overall);
+  const presets = [
+    ["All", () => { state.models = new Set(allM); state.arms = new Set(DATA.arms); }],
+    ["None", () => { state.models = new Set(); }],
+    ["GPs vs zero-shot TFMs", () => { state.models = new Set(allM); state.arms = new Set(["ctx0"]); }],
+    ["Kumo sizes", () => { state.models = new Set([...kumos, ...gps.slice(-1)]); }],
+    ["Context effect: TabPFN 3.5", () => { state.models = new Set(["tabpfn35"].filter(x => MODEL[x])); state.arms = new Set(DATA.arms); }],
+    ["Best ctxall vs GPs", () => { state.models = new Set(allM); state.arms = new Set(["ctxall"]); }],
+    ["Top 5 overall", () => { const top = ranked.slice(0, 5); state.models = new Set(top.map(f => FOLDER[f].model));
+        state.arms = new Set(top.map(f => FOLDER[f].arm).filter(a => a !== "none")); }],
+  ];
+  for (const [name, fn] of presets) P.append(el("span", {class: "chip preset", onclick: () => { fn(); changed(); }}, name));
+  document.getElementById("count").textContent = `${visFolders().length} of ${DATA.folders.length} configs shown`;
+}
+
+/* ---------------- rankings table ---------------- */
+function renderTabs() {
+  const T = document.getElementById("scopeTabs"); T.innerHTML = "";
+  for (const [k, lab] of [["all", "Whole run"], ["last20", "Last 20%"]]) if (DATA.tables[k])
+    T.append(el("button", {class: state.scope === k ? "on" : "", onclick: () => { state.scope = k; changed(); }}, lab));
+}
+/* ---------------- normalization (line-for-line copy of analyze.py: keep in sync) ---------------- */
+const CATS = ["uncertainty", "ranking", "point"], CAT_COLOR = {uncertainty: "#2a78d6", ranking: "#eb6834", point: "#1baf7a"};
+const NORM_TEXT = {
+  robust_z: "<b>robust z</b> = (b − median) / (1.4826·MAD) across configs on each dataset. 0 = a typical config, −1 ≈ one spread better. One broken config can't stretch the scale.",
+  z: "<b>z-score</b> = (b − mean) / SD across configs on each dataset. Same idea as robust z, but a single very bad config inflates the SD and squashes everyone else together.",
+  skill: "<b>skill vs reference</b> = log₂(b / b<sub>ref</sub>), clipped to ±3. 0 = as good as the reference, −1 = half its badness (2× better), +1 = 2× worse. Answers “does it beat the GP?” directly.",
+  rank: "<b>rank</b> = (rank − 1)/(n − 1) on each dataset: 0 = best, 1 = worst. Ignores how big the gaps are.",
+  minmax: "<b>min–max</b> = (b − min)/(max − min) on each dataset: 0 = best, 1 = worst. The most sensitive to one outlier config."};
+const TGT = {target90: 0.9, target95: 0.95, target125: 1.25};
+function badness(m, v) { const d = (MI[m] || {}).dir; if (v == null || !isFinite(v)) return NaN;
+  if (d === "lower") return v; if (d === "higher") return 1 - v; if (d === "target1") return Math.abs(Math.log2(Math.max(v, 1e-9)));
+  if (d in TGT) return Math.abs(v - TGT[d]); return NaN; }
+function median(a) { const b = [...a].sort((x, y) => x - y), n = b.length; return n % 2 ? b[(n - 1) / 2] : (b[n / 2 - 1] + b[n / 2]) / 2; }
+function normCol(b, method, refIdx) {
+  const ok = b.map(isFinite), x = b.filter(isFinite), out = b.map(() => NaN); if (!x.length) return out;
+  let f;
+  if (method === "z") { const mu = x.reduce((a, v) => a + v, 0) / x.length, sd = Math.sqrt(x.reduce((a, v) => a + (v - mu) ** 2, 0) / x.length); f = v => sd > 0 ? (v - mu) / sd : 0; }
+  else if (method === "robust_z") { const md = median(x); let sc = 1.4826 * median(x.map(v => Math.abs(v - md)));
+    if (!(sc > 0)) { const mu = x.reduce((a, v) => a + v, 0) / x.length; sc = Math.sqrt(x.reduce((a, v) => a + (v - mu) ** 2, 0) / x.length); }
+    f = v => sc > 0 ? (v - md) / sc : 0; }
+  else if (method === "skill") { const r = refIdx >= 0 ? b[refIdx] : NaN; const C = DATA.norm.skillClip;
+    f = v => (isFinite(r) && r > 1e-12) ? Math.max(-C, Math.min(C, Math.log2(Math.max(v, 1e-12) / r))) : NaN; }
+  else if (method === "rank") { const srt = [...x].sort((p, q) => p - q); f = v => { let lo = srt.indexOf(v), hi = srt.lastIndexOf(v); const rk = (lo + hi) / 2 + 1; return x.length > 1 ? (rk - 1) / (x.length - 1) : 0; }; }
+  else { const mn = Math.min(...x), mx = Math.max(...x); f = v => mx > mn ? (v - mn) / (mx - mn) : 0; }
+  b.forEach((v, i) => { if (ok[i]) out[i] = f(v); }); return out; }
+const NORM_CACHE = {};
+function normalized(scope) {   // -> {common: [dataset idx], Z: {metric: [folder][common j]}} for the current norm/ref
+  const key = scope + "|" + state.norm + "|" + state.ref; if (NORM_CACHE[key]) return NORM_CACHE[key];
+  const P = DATA.perDataset[scope], F = DATA.folders.map(f => f.id), refIdx = F.indexOf(state.ref);
+  const probe = P.crps || Object.values(P)[0];
+  const common = DATA.datasets.map((_, j) => j).filter(j => F.every((_, i) => probe[i][j] != null));
+  const Z = {};
+  for (const m of DATA.tables[scope].metrics) { if (!P[m] || !MI[m] || MI[m].dir === "info") continue;
+    const cols = common.map(j => normCol(F.map((_, i) => badness(m, P[m][i][j])), state.norm, refIdx));
+    Z[m] = F.map((_, i) => cols.map(c => c[i])); }
+  return (NORM_CACHE[key] = {common, Z}); }
+function scoreFor(scope, sample) {   // sample = list of positions into `common` (bootstrap) or null = all
+  const {common, Z} = normalized(scope), F = DATA.folders.map(f => f.id), use = sample || common.map((_, j) => j);
+  const on = [...state.rankOn[scope]].filter(m => Z[m]);
+  const per = {}; for (const m of on) per[m] = F.map((_, i) => { let s = 0, n = 0; for (const j of use) { const v = Z[m][i][j]; if (isFinite(v)) { s += v; n++; } } return n ? s / n : NaN; });
+  const out = F.map((f, i) => { const r = {}; for (const m of on) r[m] = per[m][i];
+    const cs = []; for (const c of CATS) { const v = on.filter(m => MI[m].cat === c).map(m => per[m][i]).filter(isFinite);
+      r[c] = v.length ? v.reduce((a, x) => a + x, 0) / v.length : NaN; if (isFinite(r[c])) cs.push(r[c]); }
+    r.overall = cs.length ? cs.reduce((a, x) => a + x, 0) / cs.length : NaN; return r; });
+  return Object.fromEntries(F.map((f, i) => [f, out[i]])); }
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function bootstrap(scope, rows, B = 1000) {
+  const n = normalized(scope).common.length, rand = mulberry(12345), pos = Object.fromEntries(rows.map(f => [f, []])), best = Object.fromEntries(rows.map(f => [f, 0])), beats = Object.fromEntries(rows.map(f => [f, 0]));
+  if (n < 2) return null;
+  for (let b = 0; b < B; b++) { const smp = Array.from({length: n}, () => Math.floor(rand() * n)), sc = scoreFor(scope, smp);
+    const order = [...rows].filter(f => isFinite(sc[f].overall)).sort((x, y) => sc[x].overall - sc[y].overall);
+    order.forEach((f, r) => pos[f].push(r + 1)); if (order.length) best[order[0]]++;
+    const rv = sc[state.ref] && sc[state.ref].overall; for (const f of rows) if (isFinite(rv) && sc[f].overall < rv) beats[f]++; }
+  const q = (a, p) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(p * s.length))] : null; };
+  return Object.fromEntries(rows.map(f => [f, {p_best: best[f] / B, lo: q(pos[f], 0.025), hi: q(pos[f], 0.975), p_beats: f === state.ref ? null : beats[f] / B}])); }
+
+function renderNormControls() {
+  const S = document.getElementById("normSel"); S.innerHTML = "";
+  const NL = {robust_z: "robust z (median/MAD)", z: "z-score (mean/SD)", skill: "skill vs reference (log₂ ratio)", rank: "rank (order only)", minmax: "min–max"};
+  for (const o of DATA.norm.options) S.append(el("option", {value: o, ...(o === state.norm ? {selected: ""} : {})}, NL[o] + (o === DATA.norm.default ? " · default" : "")));
+  S.onchange = () => { state.norm = S.value; changed(); };
+  const R = document.getElementById("refSel"); R.innerHTML = "";
+  for (const f of DATA.folders) R.append(el("option", {value: f.id, ...(f.id === state.ref ? {selected: ""} : {})}, f.label));
+  R.onchange = () => { state.ref = R.value; changed(); };
+  document.getElementById("refWrap").style.display = state.norm === "skill" ? "" : "none";
+  document.getElementById("normNote").innerHTML = NORM_TEXT[state.norm] + " Before rescaling, each metric becomes a <i>badness</i> b ≥ 0: lower-is-better as is, higher-is-better → 1 − value, targets → |value − target| (ratios: |log₂ value|).";
+  const tb = DATA.tables[state.scope], on = state.rankOn[state.scope], M_ = document.getElementById("rankMetrics"); M_.innerHTML = "";
+  for (const m of tb.metrics) { if (!MI[m] || MI[m].dir === "info") continue;
+    M_.append(el("span", {class: "chip" + (on.has(m) ? "" : " off"), title: (MI[m].cat || "") + " · " + dirText(m), onclick: () => { on.has(m) ? on.delete(m) : on.add(m); changed(); }},
+      [el("span", {class: "sw", style: `background:${CAT_COLOR[MI[m].cat] || "#888"};border-radius:50%`}), m])); }
+  document.getElementById("rmDefault").onclick = () => { state.rankOn[state.scope] = new Set(tb.ranked); changed(); };
+  document.getElementById("rmAll").onclick = () => { state.rankOn[state.scope] = new Set(tb.metrics.filter(m => MI[m] && MI[m].dir !== "info")); changed(); };
+  document.getElementById("rmNone").onclick = () => { state.rankOn[state.scope] = new Set(); changed(); };
+  document.getElementById("nCommon").textContent = normalized(state.scope).common.length;
+}
+
+function renderRankTable() {
+  const tb = DATA.tables[state.scope], W = document.getElementById("rankTable"); W.innerHTML = "";
+  const rows = visFolders().filter(f => tb.values[f]);
+  if (!rows.length) { W.append(el("div", {class: "empty"}, "Nothing selected: pick a model and a context arm above.")); return; }
+  const SC = scoreFor(state.scope, null), BT = bootstrap(state.scope, rows);
+  const scoreCols = ["overall", ...CATS].filter(c => rows.some(f => isFinite(SC[f][c])));
+  const order = [...rows].filter(f => isFinite(SC[f].overall)).sort((a, b) => SC[a].overall - SC[b].overall), place = Object.fromEntries(order.map((f, i) => [f, i + 1]));
+  const bootCols = BT ? ["pos", "p_best", "rank_ci", "p_beats"] : ["pos"];
+  const metCols = tb.metrics;
+  const isScore = k => scoreCols.includes(k);
+  const val = (f, k) => isScore(k) ? SC[f][k] : k === "pos" ? place[f] : k === "p_best" ? BT[f].p_best : k === "rank_ci" ? BT[f].lo : k === "p_beats" ? BT[f].p_beats : (tb.values[f] || {})[k];
+  const show = (f, k) => { if (k === "pos") return place[f] ?? ""; if (k === "rank_ci") return BT[f].lo == null ? "" : (BT[f].lo === BT[f].hi ? String(BT[f].lo) : `${BT[f].lo}–${BT[f].hi}`);
+    if (k === "p_best" || k === "p_beats") { const v = val(f, k); return v == null ? "–" : Math.round(v * 100) + "%"; } return fmt(val(f, k)); };
+  const lowerBetter = k => isScore(k) || k === "pos" || k === "rank_ci";
+  const higherBetter = k => k === "p_best" || k === "p_beats";
+  const {key, asc} = state.sort;
+  rows.sort((a, b) => { const va = val(a, key), vb = val(b, key);
+    if (lowerBetter(key)) return (asc ? 1 : -1) * ((va ?? 1e9) - (vb ?? 1e9));
+    if (higherBetter(key)) return (asc ? 1 : -1) * ((vb ?? -1) - (va ?? -1));
+    const ga = goodness(key, va), gb = goodness(key, vb); return (asc ? -1 : 1) * (ga - gb); });
+  const best = {};
+  for (const m of metCols) { let bv = -Infinity, bf = null; for (const f of rows) { const g = goodness(m, val(f, m)); if (g > bv) { bv = g; bf = f; } } best[m] = bf; }
+  for (const c of [...scoreCols, "pos", "rank_ci"]) { let bv = Infinity, bf = null; for (const f of rows) { const v = val(f, c); if (v != null && isFinite(v) && v < bv) { bv = v; bf = f; } } best[c] = bf; }
+  for (const c of ["p_best", "p_beats"]) { let bv = -Infinity, bf = null; for (const f of rows) { const v = BT ? val(f, c) : null; if (v != null && v > bv) { bv = v; bf = f; } } best[c] = bf; }
+  const refLab = (FOLDER[state.ref] || {}).label || state.ref;
+  const HEAD = {pos: ["#", "by overall score"], p_best: ["P(#1)", "bootstrap over datasets"], rank_ci: ["# 95% CI", "bootstrap over datasets"], p_beats: [`P(beats ${refLab})`, "overall, bootstrap"]};
+  const cols = [...bootCols.slice(0, 1), ...scoreCols, ...bootCols.slice(1), ...metCols];
+  const head = el("tr", {}, [el("th", {}, "config")].concat(cols.map(k => {
+    const ranked = state.rankOn[state.scope].has(k);
+    const lab = isScore(k) ? (k === "overall" ? "overall score" : k + " score") : HEAD[k] ? HEAD[k][0] : k + (ranked ? " ★" : "");
+    const sub = isScore(k) ? "lower is better" : HEAD[k] ? HEAD[k][1] : "mean over datasets · " + dirText(k);
+    return el("th", {title: ranked ? "★ = enters the score" : "sort", onclick: () => { state.sort = {key: k, asc: state.sort.key === k ? !state.sort.asc : true}; renderRankTable(); }},
+      [lab + (state.sort.key === k ? (state.sort.asc ? " ▲" : " ▼") : ""), el("span", {class: "dir"}, sub)]); })));
+  const body = rows.map(f => el("tr", {onmouseenter: () => setHover(f), onmouseleave: () => setHover(null)},
+    [el("td", {}, el("span", {class: "fname", title: "click to show only this config", onclick: () => solo(f)}, [swatchLine(f, 22), FOLDER[f].label]))]
+      .concat(cols.map(k => el("td", {class: best[k] === f ? "best" : ""}, show(f, k))))));
+  W.append(el("table", {}, [el("thead", {}, head), el("tbody", {}, body)]));
+  W.append(el("div", {class: "note", style: "padding:6px 10px"}, BT ? "Bootstrap: the common datasets resampled 1000× (no reruns). Two configs whose rank CIs overlap are not clearly different." : "Bootstrap needs at least 2 common datasets."));
+}
+
+/* ---------------- one-metric bars ---------------- */
+function renderBars() {
+  const tb = DATA.tables[state.scope], S = document.getElementById("barMetric");
+  if (!state.barMetric || !tb.metrics.includes(state.barMetric)) state.barMetric = tb.metrics.includes("crps") ? "crps" : tb.metrics[0];
+  S.innerHTML = ""; for (const m of tb.metrics) S.append(el("option", {value: m, ...(m === state.barMetric ? {selected: ""} : {})}, m));
+  S.onchange = () => { state.barMetric = S.value; renderBars(); };
+  const BM = document.getElementById("barMode"); BM.innerHTML = "";
+  for (const [k, lab] of [["raw", "raw value"], ["norm", "normalized"]]) BM.append(el("button", {class: state.barMode === k ? "on" : "", onclick: () => { state.barMode = k; renderBars(); }}, lab));
+  const m = state.barMetric, Zm = normalized(state.scope).Z[m];
+  const normMode = state.barMode === "norm" && Zm;
+  const FI = Object.fromEntries(DATA.folders.map((f, i) => [f.id, i]));
+  const vOf = f => normMode ? (() => { const a = Zm[FI[f]].filter(isFinite); return a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN; })() : tb.values[f][m];
+  document.getElementById("barDir").textContent = (normMode ? `${state.norm} score, lower is better` : dirText(m)) + " · sorted best to worst";
+  const rows = visFolders().filter(f => tb.values[f] && isFinite(vOf(f))).sort((a, b) => normMode ? vOf(a) - vOf(b) : goodness(m, tb.values[b][m]) - goodness(m, tb.values[a][m]));
+  const B = document.getElementById("bars"); B.innerHTML = "";
+  if (!rows.length) { B.append(el("div", {class: "empty"}, "Nothing selected.")); return; }
+  const W = B.clientWidth || 800, rowH = 22, labW = Math.min(170, W * 0.32), valW = 64, H = rows.length * rowH + 20;
+  const vals = rows.map(vOf), dd = MI[m] && MI[m].dir,
+    target = normMode ? null : dd === "target90" ? 0.9 : dd === "target95" ? 0.95 : dd === "target125" ? 1.25 : dd === "target1" ? 1 : m === "rmse_over_noise" ? 1 : null;
+  const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals, target ?? -Infinity) * 1.04 || 1;
+  const x = v => labW + (v - lo) / (hi - lo || 1) * (W - labW - valW);
+  const s = sv("svg", {viewBox: `0 0 ${W} ${H}`, height: H});
+  rows.forEach((f, i) => { const y = 6 + i * rowH, v = vOf(f), arm = FOLDER[f].arm;
+    const g = sv("g", {"data-f": f, style: "cursor:pointer"}); g.addEventListener("mouseenter", () => setHover(f)); g.addEventListener("mouseleave", () => setHover(null)); g.addEventListener("click", () => solo(f));
+    const t = sv("text", {x: labW - 8, y: y + 13, "text-anchor": "end", style: "font-size:11.5px;fill:var(--ink)"}); t.textContent = FOLDER[f].label; g.append(t);
+    const x0 = Math.min(x(0), x(v)), bw = Math.abs(x(v) - x(0));
+    g.append(sv("rect", {x: x0, y: y + 2, width: Math.max(1, bw), height: rowH - 7, rx: 3, fill: color(f),
+      "fill-opacity": arm === "ctx5" ? 0.62 : arm === "ctxall" ? 0.36 : 0.92}));
+    if (arm === "ctx5" || arm === "ctxall") g.append(sv("rect", {x: x0 + 0.5, y: y + 2.5, width: Math.max(0, bw - 1), height: rowH - 8, rx: 3,
+      fill: "none", stroke: color(f), "stroke-width": 1.2, "stroke-dasharray": ARM_DASH[arm]}));
+    const vt = sv("text", {x: Math.max(x(v), x(0)) + 6, y: y + 13, style: "font-size:11px"}); vt.textContent = fmt(v); g.append(vt); s.append(g); });
+  if (lo < 0) s.append(sv("line", {x1: x(0), x2: x(0), y1: 0, y2: H - 10, stroke: "var(--ink2)", "stroke-width": 0.8}));
+  if (target != null) { s.append(sv("line", {x1: x(target), x2: x(target), y1: 0, y2: H - 10, stroke: "var(--ink2)", "stroke-dasharray": "3 3"}));
+    const tt = sv("text", {x: x(target) + 3, y: H - 2}); tt.textContent = m === "rmse_over_noise" ? "noise floor" : "target " + target; s.append(tt); }
+  B.append(s);
+}
+
+/* ---------------- line charts ---------------- */
+function niceTicks(lo, hi, n = 5) { const span = hi - lo || 1, step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0)), err = step0 / mag;
+  const step = (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1) * mag; const out = [];
+  for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toPrecision(12)); return out; }
+function logTicks(lo, hi) { for (const ms of [[1, 2, 5], [1, 1.5, 2, 3, 5, 7], [1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 7, 8, 9]]) { const out = [];
+    for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++)
+      for (const m of ms) { const v = +(m * 10 ** e).toPrecision(6); if (v >= lo * 0.999 && v <= hi * 1.001) out.push(v); }
+    if (out.length >= 3) return out; }
+  return niceTicks(lo, hi, 4); }
+const tickFmt = v => { const a = Math.abs(v); if (a === 0) return "0"; if (a >= 1000) return v.toFixed(0);
+  return String(+v.toPrecision(3)); };
+function lineChart(container, cfg) {
+  const W = Math.max(300, container.clientWidth), H = 250, m = {l: 50, r: 12, t: 8, b: 28};
+  const fs = visFolders().filter(f => cfg.series[f]);
+  if (!fs.length) { container.append(el("div", {class: "empty"}, "Nothing selected.")); return; }
+  let xs = [], ys = [];
+  for (const f of fs) { const [it, mu, se] = cfg.series[f]; xs.push(it[0], it[it.length - 1]);
+    for (let i = 0; i < mu.length; i++) if (isFinite(mu[i])) { ys.push(mu[i] - (cfg.band ? se[i] : 0)); ys.push(mu[i] + (cfg.band ? se[i] : 0)); } }
+  const x0 = Math.min(...xs), x1 = Math.max(...xs);
+  let y0 = Math.min(...ys), y1 = Math.max(...ys); if (cfg.ref != null) { y0 = Math.min(y0, cfg.ref); y1 = Math.max(y1, cfg.ref); }
+  const log = cfg.log && y1 > 0; if (log) { y0 = Math.max(y0, y1 * 1e-3, 1e-3); }
+  const ly = v => Math.log10(Math.max(v, y0));
+  const X = v => m.l + (v - x0) / (x1 - x0 || 1) * (W - m.l - m.r);
+  const pad = log ? 0 : (y1 - y0) * 0.05;
+  const Y = log ? v => H - m.b - (ly(v) - ly(y0)) / (ly(y1) - ly(y0) || 1) * (H - m.t - m.b)
+                : v => H - m.b - (v - (y0 - pad)) / ((y1 + pad) - (y0 - pad) || 1) * (H - m.t - m.b);
+  const s = sv("svg", {viewBox: `0 0 ${W} ${H}`, height: H});
+  if (DATA.shadeFrom != null && DATA.shadeFrom < x1) s.append(sv("rect", {x: X(DATA.shadeFrom), y: m.t, width: X(x1) - X(DATA.shadeFrom), height: H - m.t - m.b, fill: "var(--shade)"}));
+  const yt = log ? logTicks(y0, y1) : niceTicks(y0 - pad, y1 + pad);
+  for (const v of yt) { const yy = Y(v); if (yy < m.t - 1 || yy > H - m.b + 1) continue;
+    s.append(sv("line", {x1: m.l, x2: W - m.r, y1: yy, y2: yy, class: "gridl"}));
+    const t = sv("text", {x: m.l - 6, y: yy + 3.5, "text-anchor": "end"}); t.textContent = tickFmt(v); s.append(t); }
+  for (const v of niceTicks(x0, x1, 6)) { const t = sv("text", {x: X(v), y: H - m.b + 16, "text-anchor": "middle"}); t.textContent = v; s.append(t); }
+  s.append(sv("line", {x1: m.l, x2: W - m.r, y1: H - m.b, y2: H - m.b, stroke: "var(--line)"}));
+  const xl = sv("text", {x: W - m.r, y: H - 2, "text-anchor": "end"}); xl.textContent = "iteration (CSV row)"; s.append(xl);
+  if (cfg.ref != null) s.append(sv("line", {x1: m.l, x2: W - m.r, y1: Y(cfg.ref), y2: Y(cfg.ref), stroke: "var(--ink2)", "stroke-dasharray": "3 3"}));
+  const clipY = v => log ? Math.max(v, y0) : v;
+  for (const f of fs) { const [it, mu, se] = cfg.series[f];
+    if (cfg.band && fs.length <= 8) { let up = "", dn = "";
+      for (let i = 0; i < it.length; i++) if (isFinite(mu[i])) up += `${X(it[i])},${Y(clipY(mu[i] + se[i]))} `;
+      for (let i = it.length - 1; i >= 0; i--) if (isFinite(mu[i])) dn += `${X(it[i])},${Y(clipY(mu[i] - se[i]))} `;
+      s.append(sv("polygon", {points: up + dn, fill: color(f), "fill-opacity": 0.1, "data-f": f, "data-kind": "band"})); }
+    let d = ""; for (let i = 0; i < it.length; i++) if (isFinite(mu[i])) d += (d ? "L" : "M") + X(it[i]).toFixed(1) + "," + Y(clipY(mu[i])).toFixed(1);
+    s.append(sv("path", {d, fill: "none", stroke: color(f), "stroke-width": 1.7, "stroke-dasharray": ARM_DASH[FOLDER[f].arm], "stroke-linejoin": "round", "data-f": f, "data-kind": "line"})); }
+  const cross = sv("line", {y1: m.t, y2: H - m.b, stroke: "var(--ink2)", "stroke-width": 0.8, visibility: "hidden"}); s.append(cross);
+  const hit = sv("rect", {x: m.l, y: m.t, width: W - m.l - m.r, height: H - m.t - m.b, fill: "transparent"}); s.append(hit);
+  const tip = document.getElementById("tip");
+  hit.addEventListener("mousemove", ev => { const r = s.getBoundingClientRect(), px = (ev.clientX - r.left) * (W / r.width);
+    const iv = Math.round(x0 + (px - m.l) / (W - m.l - m.r) * (x1 - x0)); cross.setAttribute("x1", X(iv)); cross.setAttribute("x2", X(iv)); cross.setAttribute("visibility", "visible");
+    const vals = fs.map(f => { const [it, mu] = cfg.series[f]; const i = it.indexOf(iv); return [f, i >= 0 ? mu[i] : null]; }).filter(x => x[1] != null && isFinite(x[1]));
+    vals.sort((a, b) => goodness(cfg.rankAs, b[1]) - goodness(cfg.rankAs, a[1]));
+    tip.innerHTML = `<div class="t">iteration ${iv} · best first</div>` + vals.slice(0, 14).map(([f, v]) =>
+      `<div class="r"><span><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${color(f)}"></i>${FOLDER[f].label}</span><b>${fmt(v)}</b></div>`).join("")
+      + (vals.length > 14 ? `<div class="t">+${vals.length - 14} more</div>` : "");
+    tip.style.display = "block"; const tw = tip.offsetWidth; let lx = ev.pageX + 14; if (lx + tw > window.scrollX + innerWidth - 8) lx = ev.pageX - tw - 14;
+    tip.style.left = lx + "px"; tip.style.top = (ev.pageY + 12) + "px"; });
+  hit.addEventListener("mouseleave", () => { cross.setAttribute("visibility", "hidden"); tip.style.display = "none"; });
+  container.append(s);
+}
+function renderLegend() {
+  const L = document.getElementById("legend"); L.innerHTML = "";
+  for (const f of visFolders()) L.append(el("span", {class: "lg", title: "click: show only this · hover: highlight",
+    onmouseenter: () => setHover(f), onmouseleave: () => setHover(null), onclick: () => solo(f)}, [swatchLine(f), FOLDER[f].label]));
+}
+function renderCurves() {
+  const sec = document.getElementById("curvesSec"); if (!DATA.curves) { sec.style.display = "none"; return; }
+  renderLegend(); const G = document.getElementById("curves"); G.innerHTML = "";
+  for (const [key, c] of Object.entries(DATA.curves)) { const card = el("div", {class: "card"}, [el("h4", {}, c.title), el("div", {class: "sub"}, c.dirText + (c.log ? " · log scale" : ""))]);
+    G.append(card); const box = el("div"); card.append(box); lineChart(box, c); }
+}
+function relPanel(container, folders, title) {
+  const lv = DATA.reliability.levels, W = Math.max(240, container.clientWidth), H = W, m = {l: 40, r: 8, t: 6, b: 30};
+  const X = v => m.l + v * (W - m.l - m.r), Y = v => H - m.b - v * (H - m.t - m.b);
+  const s = sv("svg", {viewBox: `0 0 ${W} ${H}`, height: H});
+  for (const v of [0, .2, .4, .6, .8, 1]) { s.append(sv("line", {x1: X(0), x2: X(1), y1: Y(v), y2: Y(v), class: "gridl"}));
+    const t = sv("text", {x: m.l - 5, y: Y(v) + 3.5, "text-anchor": "end"}); t.textContent = v; s.append(t);
+    const t2 = sv("text", {x: X(v), y: H - m.b + 14, "text-anchor": "middle"}); t2.textContent = v; s.append(t2); }
+  const xl = sv("text", {x: W - m.r, y: H - 2, "text-anchor": "end"}); xl.textContent = "nominal level p"; s.append(xl);
+  s.append(sv("line", {x1: X(0), y1: Y(0), x2: X(1), y2: Y(1), stroke: "var(--ink2)", "stroke-dasharray": "3 3"}));
+  const rows = [];
+  for (const f of folders) { const o = DATA.reliability.series[f]; if (!o) continue;
+    const gp = FOLDER[f].arm === "none", gap = o.reduce((a, v, i) => a + Math.abs(v - lv[i]), 0) / lv.length; rows.push([f, gap]);
+    s.append(sv("path", {d: lv.map((p, i) => (i ? "L" : "M") + X(p) + "," + Y(o[i])).join(""), fill: "none", stroke: color(f),
+      "stroke-width": gp ? 2.2 : 1.7, "stroke-dasharray": gp ? "6 3" : "", "data-f": f, "data-kind": "line"}));
+    lv.forEach((p, i) => { const c = sv("circle", {cx: X(p), cy: Y(o[i]), r: 2.6, fill: color(f), "data-f": f});
+      const tt = sv("title"); tt.textContent = `${FOLDER[f].label}: p=${p} observed ${fmt(o[i])}`; c.append(tt); s.append(c); }); }
+  const card = el("div", {class: "card"}, [el("h4", {}, title)]); card.append(s);
+  rows.sort((a, b) => a[1] - b[1]);
+  card.append(el("div", {class: "legend", style: "margin:4px 0 2px"}, rows.map(([f, g]) => el("span", {class: "lg",
+    onmouseenter: () => setHover(f), onmouseleave: () => setHover(null), onclick: () => solo(f), title: "mean |gap| to the diagonal (lower = better)"},
+    [(() => { const gp = FOLDER[f].arm === "none", s = sv("svg", {viewBox: "0 0 20 10", width: 20, height: 10});
+       s.append(sv("line", {x1: 1, x2: 19, y1: 5, y2: 5, stroke: color(f), "stroke-width": 2.2, "stroke-dasharray": gp ? "6 3" : ""})); return s; })(),
+     `${MODEL[FOLDER[f].model].label} ${fmt(g)}`]))));
+  container.append(card);
+}
+function renderReliability() {
+  const sec = document.getElementById("relSec"); if (!DATA.reliability) { sec.style.display = "none"; return; }
+  const R = document.getElementById("rel"); R.innerHTML = "";
+  const vis = visFolders(), gps = vis.filter(f => FOLDER[f].arm === "none");
+  const titles = {ctx0: "No context (ctx0, zero-shot)", ctx5: "5 other days (ctx5)", ctxall: "All other days (ctxall)"};
+  const arms = DATA.arms.filter(a => state.arms.has(a));
+  if (!arms.length && !gps.length) { R.append(el("div", {class: "empty"}, "Nothing selected.")); return; }
+  for (const a of (arms.length ? arms : ["none"])) {
+    const box = el("div"); R.append(box);
+    relPanel(box, gps.concat(vis.filter(f => FOLDER[f].arm === a)), a === "none" ? "GPs" : titles[a] || a);
+  }
+}
+
+function ivPanel(container, folders, title, kind, L) {
+  const lv = L.levels, W = Math.max(240, container.clientWidth), H = Math.round(W * 0.9), m = {l: 42, r: 8, t: 6, b: 30};
+  const X = v => m.l + v * (W - m.l - m.r);
+  const ser = kind === "cov" ? L.cov : L.wratio;
+  let y0 = 0, y1 = 1, Y;
+  if (kind === "cov") { Y = v => H - m.b - v * (H - m.t - m.b); }
+  else { let lo = 0.5, hi = 2; for (const f of folders) for (const v of (ser[f] || [])) if (v > 0) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    lo = Math.max(lo, 1 / 16); hi = Math.min(hi, 16); y0 = Math.log2(lo) - 0.15; y1 = Math.log2(hi) + 0.15;
+    Y = v => H - m.b - (Math.log2(Math.min(Math.max(v, 2 ** y0), 2 ** y1)) - y0) / (y1 - y0) * (H - m.t - m.b); }
+  const s = sv("svg", {viewBox: `0 0 ${W} ${H}`, height: H});
+  const ticks = kind === "cov" ? [0, .2, .4, .6, .8, 1] : [1/16, 1/8, 1/4, 1/2, 1, 2, 4, 8, 16].filter(v => Math.log2(v) >= y0 && Math.log2(v) <= y1);
+  for (const v of ticks) { s.append(sv("line", {x1: X(0), x2: X(1), y1: Y(v), y2: Y(v), class: "gridl"}));
+    const t = sv("text", {x: m.l - 5, y: Y(v) + 3.5, "text-anchor": "end"}); t.textContent = kind === "cov" ? v : (v >= 1 ? v + "×" : "1/" + (1 / v) + "×"); s.append(t); }
+  for (const v of [0, .2, .4, .6, .8, 1]) { const t2 = sv("text", {x: X(v), y: H - m.b + 14, "text-anchor": "middle"}); t2.textContent = (v * 100) + "%"; s.append(t2); }
+  const xl = sv("text", {x: W - m.r, y: H - 2, "text-anchor": "end"}); xl.textContent = "nominal interval level"; s.append(xl);
+  if (kind === "cov") s.append(sv("line", {x1: X(0), y1: Y(0), x2: X(1), y2: Y(1), stroke: "var(--ink2)", "stroke-dasharray": "3 3"}));
+  else { s.append(sv("line", {x1: X(0), x2: X(1), y1: Y(1), y2: Y(1), stroke: "var(--ink2)", "stroke-dasharray": "3 3"}));
+    const a = sv("text", {x: X(0.02), y: Y(1) - 5}); a.textContent = "right width"; s.append(a); }
+  const rows = [];
+  for (const f of folders) { const o = ser[f]; if (!o) continue; const pts = lv.map((p, i) => [p, o[i]]).filter(q => q[1] != null && isFinite(q[1]) && (kind === "cov" || q[1] > 0));
+    if (!pts.length) continue;
+    const gp = FOLDER[f].arm === "none";
+    const score = kind === "cov" ? pts.reduce((acc, [p, v]) => acc + Math.abs(v - p), 0) / pts.length : pts.reduce((acc, [, v]) => acc + Math.abs(Math.log2(v)), 0) / pts.length;
+    rows.push([f, score]);
+    s.append(sv("path", {d: pts.map(([p, v], i) => (i ? "L" : "M") + X(p) + "," + Y(v)).join(""), fill: "none", stroke: color(f),
+      "stroke-width": gp ? 2.2 : 1.7, "stroke-dasharray": gp ? "6 3" : "", "data-f": f, "data-kind": "line"}));
+    pts.forEach(([p, v]) => { const c = sv("circle", {cx: X(p), cy: Y(v), r: 2.6, fill: color(f), "data-f": f});
+      const tt = sv("title"); const wv = (L.width[f] || [])[lv.indexOf(p)];
+      tt.textContent = `${FOLDER[f].label} · ${Math.round(p * 100)}% interval: ` + (kind === "cov" ? `coverage ${fmt(v)}` : `actual/needed width ${fmt(v)} (actual width ${fmt(wv)}, needed ${fmt(wv / v)})`);
+      c.append(tt); s.append(c); }); }
+  const card = el("div", {class: "card"}, [el("h4", {}, title)]); card.append(s);
+  rows.sort((a, b) => a[1] - b[1]);
+  card.append(el("div", {class: "legend", style: "margin:4px 0 2px"}, rows.map(([f, g]) => el("span", {class: "lg",
+    onmouseenter: () => setHover(f), onmouseleave: () => setHover(null), onclick: () => solo(f)},
+    [(() => { const gp = FOLDER[f].arm === "none", q = sv("svg", {viewBox: "0 0 20 10", width: 20, height: 10});
+       q.append(sv("line", {x1: 1, x2: 19, y1: 5, y2: 5, stroke: color(f), "stroke-width": 2.2, "stroke-dasharray": gp ? "6 3" : ""})); return q; })(),
+     `${MODEL[FOLDER[f].model].label} ${fmt(g)}`]))));
+  container.append(card);
+}
+function renderIntervals() {
+  const sec = document.getElementById("ivSec"), L = DATA.intervals && (DATA.intervals[state.scope] || DATA.intervals.all);
+  if (!L) { sec.style.display = "none"; return; }
+  const A = document.getElementById("ivCov"), B = document.getElementById("ivW"); A.innerHTML = ""; B.innerHTML = "";
+  const vis = visFolders(), gps = vis.filter(f => FOLDER[f].arm === "none");
+  const titles = {ctx0: "no context (ctx0)", ctx5: "5 other days (ctx5)", ctxall: "all other days (ctxall)"};
+  const arms = DATA.arms.filter(a => state.arms.has(a));
+  if (!arms.length && !gps.length) { A.append(el("div", {class: "empty"}, "Nothing selected.")); return; }
+  for (const a of (arms.length ? arms : ["none"])) {
+    const fs = gps.concat(vis.filter(f => FOLDER[f].arm === a)), nm = a === "none" ? "GPs" : titles[a];
+    const b1 = el("div"); A.append(b1); ivPanel(b1, fs, "Coverage · " + nm, "cov", L);
+    const b2 = el("div"); B.append(b2); ivPanel(b2, fs, "Width ratio · " + nm, "wratio", L);
+  }
+}
+
+/* ---------------- static images (legacy) ---------------- */
+function renderStatic() { const sec = document.getElementById("staticSec");
+  if (!DATA.staticImages || !DATA.staticImages.length) { sec.style.display = "none"; return; }
+  const S = document.getElementById("static"); if (S.childElementCount) return;
+  for (const im of DATA.staticImages) S.append(el("img", {class: "static", alt: im.alt, src: im.src, loading: "lazy"})); }
+
+/* ---------------- flagged errors ---------------- */
+function renderFlagged() {
+  const F = DATA.flagged, T = document.getElementById("flagTable"), more = document.getElementById("flagMore"); T.innerHTML = "";
+  if (!F || !F.rows.length) { document.getElementById("flagTitle").style.display = "none"; document.getElementById("flagNote").style.display = "none"; more.style.display = "none"; return; }
+  const ci = n => F.columns.indexOf(n), im = ci("model"), ia = ci("arm");
+  const fid = r => (r[ia] === "none" || r[ia] == null || r[ia] === "") ? r[im] : r[im] + "_" + r[ia];
+  const rows = F.rows.filter(r => visible(fid(r)));
+  document.getElementById("flagTitle").textContent = `Flagged big errors (${rows.length} shown of ${F.total})`;
+  document.getElementById("flagNote").innerHTML = F.note + (F.rows.length < F.total ? ` Only the first ${F.rows.length} are embedded; the full list is in flagged_errors.csv.` : "");
+  const head = el("tr", {}, F.columns.map(c => el("th", {style: "cursor:default"}, c)));
+  const body = rows.slice(0, state.flagN).map(r => el("tr", {}, r.map((v, j) => el("td", {}, typeof v === "number" ? (Number.isInteger(v) ? String(v) : fmt(v)) : String(v)))));
+  T.append(el("table", {}, [el("thead", {}, head), el("tbody", {}, body)]));
+  more.style.display = rows.length > state.flagN ? "" : "none"; more.onclick = () => { state.flagN += 400; renderFlagged(); };
+}
+
+/* ---------------- wiring ---------------- */
+function changed() { save(); renderBar(); renderTabs(); renderNormControls(); renderRankTable(); renderBars(); renderCurves(); renderReliability(); renderIntervals(); renderFlagged(); }
+document.getElementById("title").textContent = DATA.title;
+document.getElementById("note").innerHTML = DATA.note;
+renderStatic(); changed();
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { renderBars(); renderCurves(); renderReliability(); renderIntervals(); }, 150); });
+</script>
+</body>
+</html>

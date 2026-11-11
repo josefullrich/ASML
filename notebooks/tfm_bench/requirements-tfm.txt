@@ -1,0 +1,9 @@
+# Model libraries for notebooks/tfm_*.ipynb (the notebooks install these themselves; listed here for local setups).
+# Merge into the repo's requirements.txt if you like. numpy / scipy / pandas / torch / matplotlib are assumed present.
+causilo==1.0.3
+structured-data-models==0.2.1
+tabpfn==9.2.0
+botorch==0.18.1
+gpytorch==1.15.2
+# classifier suite / causilo_trials need the frequency-weights build (PR #19) instead of causilo==1.0.3:
+#   pip install --force-reinstall --no-deps "git+https://github.com/nums-ai/causilo@06b3fd0642a29d355581d6894899a3b5839686df"
