@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BO benchmark report</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--__PLOTLY__-->
+<style>
+:root{--bg:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#8a8984;--line:#e4e3dd;--grid:#efeee9;--chip:#f3f2ee;--on:#0b0b0b;--on-ink:#fff;--warn:#8a5a00;--warnbg:#fff4d6}
+@media (prefers-color-scheme:dark){:root{--bg:#0d0d0d;--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#8f8e88;--line:#383835;--grid:#2a2a28;--chip:#262624;--on:#f0efec;--on-ink:#0d0d0d;--warn:#f0c060;--warnbg:#3a2f12}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1320px;margin:0 auto;padding:16px 24px 60px}
+h1{font-size:22px;font-weight:600;margin:0 0 2px}
+h2{font-size:17px;font-weight:600;margin:34px 0 2px}
+.sub{color:var(--ink2);margin:0 0 10px;font-size:13px;max-width:980px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:10px 0}
+.bar{position:sticky;top:0;z-index:5;background:var(--bg);border-bottom:1px solid var(--line);padding:8px 0}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:3px 0}
+.lab{font-size:12px;color:var(--muted);width:76px;flex:none}
+.lab2{font-size:12px;color:var(--muted);margin-left:12px}
+.chip{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:999px;padding:2px 10px;font-size:12.5px;cursor:pointer;user-select:none;white-space:nowrap}
+.chip.off{opacity:.38}
+.chip.on{background:var(--on);color:var(--on-ink);border-color:var(--on)}
+select{font:inherit;font-size:13px;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);max-width:340px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th{color:var(--ink2);font-weight:600;cursor:pointer;user-select:none;vertical-align:bottom}
+th .d{display:block;font-weight:400;color:var(--muted);font-size:10.5px}
+td:first-child,th:first-child{text-align:left}
+td.best{font-weight:700}
+tbody tr:hover{background:rgba(127,127,127,.08)}
+.pm{color:var(--muted);font-size:11px}
+.sw{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:7px}
+.plot{width:100%;height:420px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:12px}
+.note{color:var(--ink2);font-size:12.5px}
+.warn{background:var(--warnbg);color:var(--warn);border:1px solid var(--warn);border-radius:10px;padding:8px 12px;margin:10px 0;font-size:13px}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:13px;margin:0}
+dt{font-weight:600}dd{margin:0;color:var(--ink2)}
+code{font-size:12px;background:var(--grid);padding:0 4px;border-radius:4px}
+details summary{cursor:pointer;color:var(--ink2);font-size:13px}
+</style>
+</head>
+<body>
+<div class="bar"><main style="padding:0 24px">
+  <div class="row"><span class="lab">Model</span><span id="f_model" class="row"></span><span class="lab2">Context</span><span id="f_context" class="row"></span><span class="lab2">Acquisition</span><span id="f_acq" class="row"></span></div>
+  <div class="row"><span class="lab">Yield arm</span><span id="f_arm" class="row"></span></div>
+  <div class="row"><span class="lab">Output</span><select id="s_output"></select>
+    <span class="lab2">Prediction data</span><select id="s_source"></select><select id="s_size"></select><select id="s_region"></select>
+    <span class="lab2">Winner by</span><span id="f_agg" class="row"></span>
+    <span class="lab2">Colour by</span><select id="s_color"></select></div>
+</main></div>
+<main>
+<h1 id="title"></h1>
+<p class="sub" id="meta"></p>
+<div id="banner"></div>
+
+<h2>Leaderboard</h2>
+<p class="sub">One row per arm (model · context · yield arm · acquisition). Click a chip to hide a level, double-click to show only that level. Click a column to sort. Bold = best among the rows shown.</p>
+<div class="row"><span id="f_group" class="row"></span></div>
+<div class="card" style="overflow-x:auto"><table id="board"></table></div>
+
+<h2>Optimisation progress</h2>
+<p class="sub">Mean over seeds for each arm, against the number of black-box evaluations. The shaded part on the left is the shared starting design, before any model chooses a point.</p>
+<div class="row"><select id="s_curve"></select><span id="f_seedlines" class="row"></span></div>
+<div class="card"><div id="pCurve" class="plot" style="height:480px"></div></div>
+
+<h2>Compare one metric</h2>
+<p class="sub">Pick any metric. Bars are sorted best to worst; the error bar is ±1 standard error over the units being averaged (seeds for BO metrics; seeds for prediction metrics).</p>
+<div class="row"><select id="s_bar"></select><span class="note" id="barNote"></span></div>
+<div class="card"><div id="pBar" class="plot"></div></div>
+
+<h2>Confidence: stated vs actual</h2>
+<p class="sub">Left: how often the truth fell inside the central band the model asked for. On the diagonal = honest, below = overconfident. Right: the spread the model predicted against the error that actually happened, in equal-count bins. On the diagonal = the stated spread matches reality; below = the model claims more spread than there was. Colours match the leaderboard; hover a line for its name.</p>
+<div class="grid2"><div class="card"><div id="pRel" class="plot" style="height:460px"></div></div><div class="card"><div id="pSS" class="plot" style="height:460px"></div></div></div>
+
+<h2>Does prediction quality predict BO performance?</h2>
+<p class="sub">Each dot is one arm (mean over seeds). X is a prediction metric for the output chosen above; Y is a BO outcome. The rank correlation is across the arms shown, so it rests on few points; read it as a direction, not a law.</p>
+<div class="row"><span class="lab">X</span><select id="s_sx"></select><span class="lab2">Y</span><select id="s_sy"></select><span class="note" id="scNote"></span></div>
+<div class="card"><div id="pSc" class="plot" style="height:460px"></div></div>
+
+<div id="shadowWrap">
+<h2>Cheap variants that need no extra BO run</h2>
+<p class="sub">The same classifier predictions turned into a count distribution in different ways. "Fixed data" rows come from the prediction benchmark; "along the run" rows are one-step-ahead predictions on each BO trajectory.</p>
+<div class="card" style="overflow-x:auto"><table id="shadow"></table></div>
+</div>
+
+<div id="quizWrap">
+<h2>Quiz size</h2>
+<p class="sub">Beta-binomial φ fitted in the context stage by holding back part of the context and predicting it from the rest. Left: the fitted φ (bar = range over repeats). Right: the resulting log score minus the entropy floor on the held-out black-box points.</p>
+<div class="grid2"><div class="card"><div id="pQ1" class="plot" style="height:380px"></div></div><div class="card"><div id="pQ2" class="plot" style="height:380px"></div></div></div>
+</div>
+
+<h2>What the metrics mean</h2>
+<div class="card"><dl id="gloss"></dl></div>
+<details class="card"><summary>Run settings and reference optimum</summary><pre id="settings" style="font-size:12px;white-space:pre-wrap"></pre></details>
+</main>
+
+<script>
+const D = __DATA__;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const PAL = ["#2a78d6","#eb6834","#1baf7a","#7d1f6b","#d68a00","#3f2fa8","#c0392b","#008300","#e87ba4","#6b7280","#00a3a3","#8a5a00"];
+const FACTORS = ["model","context","arm","acq"];
+const lab = (f, v) => (D.labels[f] && D.labels[f][v]) || v;
+const SHORT = {reg_logit:"logit regressor", clf_raw:"classifier (point)", clf_bb:"clf + beta-binomial", clf_ess_bb:"clf + size weights + BB", clf_phix:"clf + BB, φ(x)", clf_binned:"binned-count clf", reg:"regressors", feas_clf:"feasibility clf", matlab:"MATLAB EI", spread:"spread EI", none:"no ctx", machines:"ctx"};
+const sh = v => SHORT[v] || lab("model", v);
+
+// ---- metric catalogue ------------------------------------------------------
+const T1 = D.targets || [];
+const BO = {
+  final_best: {l: D.objective_label, d: "higher is better", dir: 1, f: 3, g: "bo", desc: "The best objective value found among evaluations that truly satisfy every constraint, using the simulator's noise-free yield (never visible to the models)."},
+  final_regret: {l: "Final regret", d: "lower is better", dir: -1, f: 3, g: "bo", desc: "Reference optimum minus the best feasible value found by the last evaluation. 0 = found the optimum."},
+  share_meeting_yield: {l: "Share of BO steps meeting the yield target", d: "higher", dir: 1, f: 2, g: "bo", desc: "Of the points the model chose, the fraction whose true yield met the target."},
+  final_cost: {l: "Best true cost", d: "higher", dir: 1, f: 3, g: "bo", desc: "Best value of the optimiser's own cost function evaluated with the true yield. This is what the acquisition is actually asked to maximise."},
+  sec_per_step: {l: "Seconds per BO step", d: "lower", dir: -1, f: 2, g: "bo", desc: "Average wall-clock time for one model fit, candidate scoring and evaluation."},
+};
+for (const t of T1) BO[t] = {l: "Evaluations to reach " + t.replace("evals_to_", "") + "% of the optimum", d: "lower; never = run length", dir: -1, f: 0, g: "bo", censor: true, desc: "First evaluation at which the best feasible value reached that share of the reference optimum. Runs that never got there count as the full run length."};
+const PR = {
+  excess: {l: "Log score − entropy floor", d: "lower; 0 = noise floor", dir: -1, f: 3, g: "dist", count: true, desc: "−log of the probability given to the count that happened, minus what a model that knew the true yield would still average from counting noise alone. The log score blows up when a model is confidently wrong; the floor is the unavoidable part."},
+  nll: {l: "Log score", d: "lower", dir: -1, f: 3, g: "dist", count: true, desc: "−log P(the count that happened). Lower is better."},
+  overdisp: {l: "Overdispersion ratio", d: "target 1", dir: 0, target: 1, log: true, f: 2, g: "dist", count: true, desc: "Observed misses of the predicted mean divided by the misses a plain binomial with that mean would produce. 1 = misses are pure counting luck. It judges the mean only."},
+  crps: {l: "CRPS", d: "lower", dir: -1, f: 4, g: "dist", desc: "Rewards putting probability near the truth, not only exactly on it. In counts for yield, in the output's units otherwise."},
+  cov90: {l: "Coverage of the 90% band", d: "target 0.90", dir: 0, target: 0.9, f: 3, g: "conf", desc: "How often the truth fell inside the central 90% of the predicted distribution."},
+  cov_err: {l: "Coverage error", d: "lower", dir: -1, f: 3, g: "conf", desc: "Mean gap between asked-for and achieved coverage over 10%…99%: the whole reliability curve in one number."},
+  rel_slope: {l: "Reliability slope", d: "target 1", dir: 0, target: 1, f: 2, g: "conf", desc: "Slope of achieved vs asked-for coverage. Below 1 = overconfident (bands too narrow)."},
+  rel_r2: {l: "Reliability linearity (R²)", d: "higher", dir: 1, f: 3, g: "conf", desc: "How close the reliability curve is to a straight line. A straight but tilted line can be fixed by one rescaling; a bent one cannot."},
+  spread_ratio: {l: "Stated spread / actual error", d: "target 1", dir: 0, target: 1, log: true, f: 2, g: "conf", desc: "Root-mean-square predicted standard deviation divided by root-mean-square error. Below 1 = the model claims less spread than there was."},
+  spread_slope: {l: "Spread–error slope", d: "target 1", dir: 0, target: 1, f: 2, g: "conf", desc: "Across bins of predicted spread, how much the actual error grows per unit of stated spread. Near 0 = the model's confidence carries no information about where it is wrong."},
+  width_ratio: {l: "90% width / width needed", d: "target 1", dir: 0, target: 1, log: true, f: 2, g: "conf", desc: "Average width of the predicted 90% band divided by the width that would have covered 90% of the actual errors."},
+  brier_perfect: {l: "Brier score, P(perfect run)", d: "lower", dir: -1, f: 4, g: "conf", count: true, desc: "Squared error of the predicted probability that every die passes."},
+  rmse: {l: "RMSE of the mean", d: "lower", dir: -1, f: 4, g: "acc", desc: "Against the true underlying value when the simulator provides it, otherwise against the measurement."},
+  mae: {l: "MAE of the mean", d: "lower", dir: -1, f: 4, g: "acc", desc: "Mean absolute error of the point prediction."},
+  kendall: {l: "Kendall's tau", d: "higher", dir: 1, f: 3, g: "acc", desc: "Whether the model orders points the way the truth does (−1 to 1)."},
+  top10_recall: {l: "Top-10% recall", d: "higher", dir: 1, f: 2, g: "acc", desc: "Share of the truly best 10% of points that the model also ranks in its top 10%."},
+};
+const GROUPS = {bo: "BO outcome", dist: "Distribution", conf: "Confidence", acc: "Accuracy"};
+
+// ---- state -------------------------------------------------------------------
+const uniq = a => [...new Set(a)];
+const levels = Object.fromEntries(FACTORS.map(f => [f, uniq(D.runs.map(r => r[f]).concat(D.pred.map(p => p[f]).filter(x => x !== undefined)))]));
+const st = {on: Object.fromEntries(FACTORS.map(f => [f, new Set(levels[f])])), output: (D.outputs.find(o => o.kind === "binomial") || D.outputs[0]).name, source: "traj", size: null, region: "all", agg: "mean", group: "bo", color: "arm", sort: null, asc: true, curve: "best", seedlines: false, bar: "final_best", sx: null, sy: "final_best"};
+const sizes = uniq(D.pred.map(p => p.size)).sort((a, b) => a - b); st.size = sizes[sizes.length - 1] ?? null;
+const regions = uniq(D.pred.flatMap(p => Object.values(p.outputs).flatMap(o => Object.keys(o))));
+const outSpec = () => D.outputs.find(o => o.name === st.output);
+const isCount = () => outSpec().kind === "binomial";
+const armId = r => FACTORS.map(f => r[f]).join("|");
+const armLabel = id => { const [m, c, a, q] = id.split("|"); return `${sh(m)} · ${sh(c)} · ${sh(a)} · ${sh(q)}`; };
+const visible = r => FACTORS.every(f => st.on[f].has(r[f]));
+const armsShown = () => uniq(D.runs.filter(visible).map(armId));
+const prKeys = () => Object.keys(PR).filter(k => !PR[k].count || isCount());
+const metricDef = k => BO[k] || PR[k];
+
+function predMetrics(run) {            // prediction metrics of one run for the chosen output and data source
+  let m;
+  if (st.source === "traj") m = (run.traj || {})[st.output];
+  else { const p = D.pred.find(p => p.model === run.model && p.context === run.context && p.arm === run.arm && p.seed === run.seed && p.size === st.size); m = p && p.outputs[st.output] && p.outputs[st.output][st.region]; }
+  if (!m) return null;
+  return Object.assign({width_ratio: (m.width90 != null && m.needed90) ? m.width90 / m.needed90 : null}, m);
+}
+function value(run, k) {
+  if (BO[k]) { let v = run.bo[k]; if (BO[k].censor && (v === null || v === undefined)) v = (run.done && run.bo.final_regret != null) ? run.n_iter : null; return v; }
+  const m = predMetrics(run); return m ? m[k] : null;
+}
+function units(id, k) { return D.runs.filter(r => armId(r) === id).map(r => [r.seed, value(r, k)]).filter(x => x[1] !== null && x[1] !== undefined && isFinite(x[1])); }
+function stat(id, k) { const v = units(id, k).map(x => x[1]); if (!v.length) return [NaN, NaN, 0]; const m = v.reduce((a, b) => a + b, 0) / v.length; const se = v.length > 1 ? Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / (v.length - 1) / v.length) : NaN; return [m, se, v.length]; }
+function bad(k, v) { const M = metricDef(k); if (v === null || v === undefined || !isFinite(v)) return Infinity; if (M.dir === 0) return M.log ? Math.abs(Math.log(Math.max(v, 1e-12) / M.target)) : Math.abs(v - M.target); return -M.dir * v; }
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function winRates(ids, k) {            // share of bootstrap resamples of the seeds in which each arm comes out best
+  const seeds = uniq(D.runs.map(r => r.seed)); const tab = Object.fromEntries(ids.map(id => [id, Object.fromEntries(units(id, k))]));
+  const wins = Object.fromEntries(ids.map(id => [id, 0])); const rnd = mulberry(12345); const B = 600; let tot = 0;
+  for (let b = 0; b < B; b++) { const pick = seeds.map(() => seeds[Math.floor(rnd() * seeds.length)]); let best = null, bv = Infinity;
+    for (const id of ids) { const v = pick.map(s => tab[id][s]).filter(x => x !== undefined); if (!v.length) continue; const s = bad(k, v.reduce((a, c) => a + c, 0) / v.length); if (s < bv) { bv = s; best = id; } }
+    if (best) { wins[best]++; tot++; } }
+  return Object.fromEntries(ids.map(id => [id, tot ? wins[id] / tot : NaN]));
+}
+const colorOf = id => { const parts = id.split("|"); const f = st.color; if (f === "arm+model") { const keys = uniq(armsShown().map(a => a.split("|")[0] + "|" + a.split("|")[2])); return PAL[keys.indexOf(parts[0] + "|" + parts[2]) % PAL.length]; } const i = FACTORS.indexOf(f); return PAL[Math.max(0, levels[f].indexOf(parts[i])) % PAL.length]; };
+const dashOf = id => { const [m, c, a, q] = id.split("|"); return q === "spread" ? "dot" : "solid"; };
+const widthOf = id => id.split("|")[1] === "none" ? 1.6 : 2.6;
+
+const el = (t, a = {}, kids = []) => { const e = document.createElement(t); for (const [k, v] of Object.entries(a)) { if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else if (k === "html") e.innerHTML = v; else e.setAttribute(k, v); } for (const c of [].concat(kids)) if (c != null) e.append(c); return e; };
+const lay = x => Object.assign({paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", font: {color: css("--ink2"), size: 12}, margin: {l: 60, r: 16, t: 30, b: 46}, hovermode: "closest", legend: {orientation: "h", y: -0.2, yanchor: "top", font: {size: 10.5}}, xaxis: {gridcolor: css("--grid"), zeroline: false}, yaxis: {gridcolor: css("--grid"), zeroline: false}}, x || {});
+const pc = {displaylogo: false, responsive: true, toImageButtonOptions: {format: "png", scale: 2}};
+const fill = (id, opts, cur) => { const s = document.getElementById(id); s.innerHTML = ""; for (const [v, l] of opts) s.append(el("option", {value: v}, l)); if (cur != null) s.value = cur; return s; };
+
+function controls() {
+  for (const f of FACTORS) { const box = document.getElementById("f_" + f); box.innerHTML = "";
+    for (const v of levels[f]) box.append(el("span", {class: "chip" + (st.on[f].has(v) ? "" : " off"), title: lab(f, v) + " — click to toggle, double-click to show only this",
+      onclick: () => { st.on[f].has(v) ? st.on[f].delete(v) : st.on[f].add(v); render(); }, ondblclick: () => { st.on[f] = new Set([v]); render(); }}, f === "arm" ? lab(f, v) : sh(v))); }
+  const A = document.getElementById("f_agg"); A.innerHTML = "";
+  for (const [k, l] of [["mean", "average over seeds"], ["win", "wins most often"]]) A.append(el("span", {class: "chip" + (st.agg === k ? " on" : ""), onclick: () => { st.agg = k; render(); }}, l));
+  const G = document.getElementById("f_group"); G.innerHTML = "";
+  for (const [k, l] of Object.entries(GROUPS)) G.append(el("span", {class: "chip" + (st.group === k ? " on" : ""), onclick: () => { st.group = k; st.sort = null; render(); }}, l));
+  const S = document.getElementById("f_seedlines"); S.innerHTML = ""; S.append(el("span", {class: "chip" + (st.seedlines ? " on" : ""), onclick: () => { st.seedlines = !st.seedlines; curves(); controls(); }}, "show each seed"));
+}
+
+function board() {
+  const ids = armsShown(), T = document.getElementById("board");
+  if (!ids.length) { T.innerHTML = "<tr><td>nothing selected</td></tr>"; return; }
+  const keys = (st.group === "bo" ? Object.keys(BO) : prKeys().filter(k => PR[k].g === st.group)).filter(k => D.runs.some(r => { const v = value(r, k); return v !== null && v !== undefined; }));
+  const S = Object.fromEntries(ids.map(id => [id, Object.fromEntries(keys.map(k => [k, stat(id, k)]))]));
+  const W = st.agg === "win" ? Object.fromEntries(keys.map(k => [k, winRates(ids, k)])) : null;
+  const score = (id, k) => W ? -W[k][id] : bad(k, S[id][k][0]);
+  const sk = st.sort && keys.includes(st.sort) ? st.sort : keys[0];
+  ids.sort((a, b) => { const x = st.sort === "name" ? armLabel(a) : score(a, sk), y = st.sort === "name" ? armLabel(b) : score(b, sk); return (x > y ? 1 : x < y ? -1 : 0) * (st.asc ? 1 : -1); });
+  const best = Object.fromEntries(keys.map(k => [k, Math.min(...ids.map(id => score(id, k)))]));
+  const head = `<tr><th data-k="name">arm</th><th>seeds</th>` + keys.map(k => `<th data-k="${k}">${metricDef(k).l}${sk === k ? (st.asc ? " ▲" : " ▼") : ""}<span class="d">${W ? "share of resamples won" : metricDef(k).d}</span></th>`).join("") + "</tr>";
+  const body = ids.map(id => { const runs = D.runs.filter(r => armId(r) === id); const part = runs.some(r => !r.done) ? ` <span class="pm">(${Math.min(...runs.map(r => r.i_done))}/${runs[0].n_iter})</span>` : "";
+    const point = D.point_arms.includes(id.split("|")[2]) ? ' <span class="pm" title="This arm outputs a point; distribution metrics score the binomial it implies.">point</span>' : "";
+    return `<tr><td><span class="sw" style="background:${colorOf(id)}"></span>${armLabel(id)}${point}${part}</td><td>${runs.length}</td>` + keys.map(k => { const [m, se] = S[id][k]; const txt = W ? (isFinite(W[k][id]) ? (100 * W[k][id]).toFixed(0) + "%" : "–") : (isFinite(m) ? m.toFixed(metricDef(k).f) : "–");
+      return `<td class="${score(id, k) === best[k] && isFinite(best[k]) ? "best" : ""}">${txt} <span class="pm">${!W && isFinite(se) ? "±" + se.toFixed(metricDef(k).f) : ""}</span></td>`; }).join("") + "</tr>"; }).join("");
+  T.innerHTML = head + body;
+  T.querySelectorAll("th[data-k]").forEach(th => th.onclick = () => { const k = th.dataset.k; st.asc = st.sort === k ? !st.asc : true; st.sort = k; board(); });
+}
+
+function curves() {
+  const ids = armsShown(), key = st.curve, tr = [];
+  const logy = key === "regret";
+  for (const id of ids) { const runs = D.runs.filter(r => armId(r) === id && r.curves[key] && r.curves[key].length); if (!runs.length) continue;
+    const n = Math.max(...runs.map(r => r.curves[key].length)); const x = Array.from({length: n}, (_, i) => i + 1);
+    const y = x.map((_, i) => { const v = runs.map(r => r.curves[key][i]).filter(v => v !== null && v !== undefined); return v.length === runs.length ? v.reduce((a, b) => a + b, 0) / v.length : null; });
+    const points = key === "true_yield" || key === "violation";
+    tr.push({x, y, mode: points ? "markers" : "lines", name: armLabel(id), marker: {size: 4, color: colorOf(id)}, line: {color: colorOf(id), dash: dashOf(id), width: widthOf(id), shape: points ? "linear" : "hv"}, hovertemplate: armLabel(id) + "<br>evaluation %{x}: %{y:.4f}<extra></extra>"});
+    if (st.seedlines && !points) for (const r of runs) tr.push({x, y: r.curves[key], mode: "lines", showlegend: false, hoverinfo: "skip", opacity: 0.35, line: {color: colorOf(id), width: 1, shape: "hv"}});
+  }
+  const ninit = D.runs.length ? D.runs[0].n_init : 0; const shapes = [{type: "rect", xref: "x", yref: "paper", x0: 0, x1: ninit, y0: 0, y1: 1, fillcolor: css("--muted"), opacity: 0.08, line: {width: 0}}];
+  const refs = Object.values(D.reference).map(r => r && r.value).filter(v => v != null);
+  if (key === "best" && refs.length) { const m = refs.reduce((a, b) => a + b, 0) / refs.length; shapes.push({type: "line", xref: "paper", x0: 0, x1: 1, y0: m, y1: m, line: {dash: "dash", color: css("--ink2"), width: 1}}); }
+  const titles = {best: D.objective_label, regret: "Regret (reference optimum − best feasible so far)", cost: "Best true cost so far", true_yield: "True yield of each evaluated point", violation: "Total constraint violation of each evaluated point"};
+  Plotly.react("pCurve", tr, lay({shapes, xaxis: {title: "black-box evaluations", gridcolor: css("--grid")}, yaxis: {title: titles[key], type: logy ? "log" : "linear", gridcolor: css("--grid")}, legend: {orientation: "h", y: -0.16, yanchor: "top", font: {size: 10.5}}}), pc);
+}
+
+function bars() {
+  const k = st.bar, M = metricDef(k); if (!M) return;
+  const all = armsShown(); const W = st.agg === "win" ? winRates(all, k) : null;
+  const ids = all.map(id => [id, stat(id, k)]).filter(x => isFinite(x[1][0])).sort((a, b) => W ? W[b[0]] - W[a[0]] : bad(k, a[1][0]) - bad(k, b[1][0]));
+  document.getElementById("barNote").textContent = (W ? "share of seed resamples in which the arm is best" : M.d) + (PR[k] ? " · " + outSpec().label + " · " + (st.source === "traj" ? "one-step-ahead along each BO run" : `fixed data, ${st.size} training points`) : "");
+  const tr = [{type: "bar", orientation: "h", y: ids.map(x => armLabel(x[0])), x: ids.map(x => W ? W[x[0]] : x[1][0]), error_x: W ? undefined : {type: "data", array: ids.map(x => isFinite(x[1][1]) ? x[1][1] : 0), color: css("--ink2"), thickness: 1},
+    marker: {color: ids.map(x => colorOf(x[0])), pattern: {shape: ids.map(x => x[0].split("|")[3] === "spread" ? "/" : "")}}, hovertemplate: "%{y}: %{x:.4f}<extra></extra>"}];
+  const shapes = !W && M.dir === 0 ? [{type: "line", x0: M.target, x1: M.target, yref: "paper", y0: 0, y1: 1, line: {dash: "dash", color: css("--ink2"), width: 1}}] : [];
+  const h = Math.max(300, 22 * ids.length + 90);
+  Plotly.react("pBar", tr, lay({height: h, margin: {l: 330, r: 30, t: 10, b: 46}, shapes, yaxis: {autorange: "reversed", gridcolor: css("--grid")}, xaxis: {title: W ? "share won" : M.l, type: !W && M.log ? "log" : "linear", gridcolor: css("--grid")}}), pc);
+  document.getElementById("pBar").style.height = h + "px";
+}
+
+function meanCurve(id, key) { const ms = D.runs.filter(r => armId(r) === id).map(predMetrics).filter(m => m && m[key] && m[key].length); if (!ms.length) return null; const n = ms[0][key].length; return Array.from({length: n}, (_, j) => ms.reduce((a, m) => a + m[key][j], 0) / ms.length); }
+function confidence() {
+  const ids = armsShown(), a = [], b = []; let mx = 0;
+  for (const id of ids) { const y = meanCurve(id, "cov_curve"); if (y) a.push({x: D.cov_levels, y, mode: "lines+markers", name: armLabel(id), marker: {size: 5, color: colorOf(id)}, line: {color: colorOf(id), dash: dashOf(id), width: widthOf(id)}, hovertemplate: armLabel(id) + "<br>asked %{x}: got %{y:.3f}<extra></extra>"});
+    const sx = meanCurve(id, "ss_x"), sy = meanCurve(id, "ss_y"); if (sx && sy) { mx = Math.max(mx, ...sx, ...sy); b.push({x: sx, y: sy, mode: "lines+markers", name: armLabel(id), marker: {size: 5, color: colorOf(id)}, line: {color: colorOf(id), dash: dashOf(id), width: widthOf(id)}, hovertemplate: armLabel(id) + "<br>stated %{x:.3f}: actual %{y:.3f}<extra></extra>"}); } }
+  a.push({x: [0, 1], y: [0, 1], mode: "lines", line: {dash: "dash", color: css("--ink2"), width: 1}, showlegend: false, hoverinfo: "skip"});
+  b.push({x: [0, mx], y: [0, mx], mode: "lines", line: {dash: "dash", color: css("--ink2"), width: 1}, showlegend: false, hoverinfo: "skip"});
+  const u = isCount() ? "counts" : (outSpec().unit || "output units");
+  Plotly.react("pRel", a, lay({title: {text: "Reliability · " + outSpec().label, font: {size: 13}}, xaxis: {title: "asked-for coverage", range: [0, 1], gridcolor: css("--grid")}, yaxis: {title: "achieved coverage", range: [0, 1], gridcolor: css("--grid")}, showlegend: false}), pc);
+  Plotly.react("pSS", b, lay({title: {text: "Stated spread vs actual error · " + outSpec().label, font: {size: 13}}, xaxis: {title: "predicted standard deviation (" + u + ")", gridcolor: css("--grid"), rangemode: "tozero"}, yaxis: {title: "actual RMS error (" + u + ")", gridcolor: css("--grid"), rangemode: "tozero"}, showlegend: false}), pc);
+}
+
+function spearman(x, y) { const rk = v => { const o = v.map((a, i) => [a, i]).sort((p, q) => p[0] - q[0]); const r = Array(v.length); o.forEach((p, i) => r[p[1]] = i); return r; }; const a = rk(x), b = rk(y), n = x.length; const ma = (n - 1) / 2; let s = 0, da = 0, db = 0; for (let i = 0; i < n; i++) { s += (a[i] - ma) * (b[i] - ma); da += (a[i] - ma) ** 2; db += (b[i] - ma) ** 2; } return s / Math.sqrt(da * db); }
+function scatter() {
+  const kx = st.sx, ky = st.sy; if (!kx || !ky) return;
+  const pts = armsShown().map(id => [id, stat(id, kx)[0], stat(id, ky)[0]]).filter(p => isFinite(p[1]) && isFinite(p[2]));
+  const tr = [{x: pts.map(p => p[1]), y: pts.map(p => p[2]), text: pts.map(p => armLabel(p[0])), mode: "markers", marker: {size: 11, color: pts.map(p => colorOf(p[0])), symbol: pts.map(p => p[0].split("|")[3] === "spread" ? "diamond" : "circle"), line: {width: pts.map(p => p[0].split("|")[1] === "none" ? 0 : 2), color: css("--ink")}}, hovertemplate: "%{text}<br>x %{x:.4f} · y %{y:.4f}<extra></extra>"}];
+  const rho = pts.length >= 4 ? spearman(pts.map(p => p[1]), pts.map(p => p[2])) : NaN;
+  document.getElementById("scNote").textContent = pts.length >= 4 ? `Spearman rank correlation ${rho.toFixed(2)} across ${pts.length} arms · circle = MATLAB EI, diamond = spread EI, outlined = with context` : "need at least 4 arms with both values";
+  Plotly.react("pSc", tr, lay({xaxis: {title: PR[kx].l + " · " + outSpec().label, type: PR[kx].log ? "log" : "linear", gridcolor: css("--grid")}, yaxis: {title: BO[ky].l, gridcolor: css("--grid")}, showlegend: false}), pc);
+}
+
+function shadow() {
+  const rows = [], keys = ["excess", "cov_err", "crps", "spread_ratio"]; const nm = {raw_binomial: "raw binomial", bb_during_run: "beta-binomial, φ learned during the run", platt: "logit shift/scale (Platt)", platt_bb: "Platt + beta-binomial", bb_quiz20: "beta-binomial, φ from a 20% quiz of all rows"};
+  if (isCount()) {
+    for (const p of D.pred) { if (!FACTORS.slice(0, 3).every(f => st.on[f].has(p[f])) || p.size !== st.size) continue; const s = (p.shadow || {})[st.output]; if (!s) continue;
+      for (const [v, m] of Object.entries(s)) rows.push([`${sh(p.model)} · ${sh(p.context)} · ${sh(p.arm)}`, nm[v] || v, "fixed data", p.seed, m[st.region] || m.all]); }
+    for (const r of D.runs) { if (!visible(r)) continue; const s = (r.traj_shadow || {})[st.output]; if (!s) continue; for (const [v, m] of Object.entries(s)) rows.push([armLabel(armId(r)), nm[v] || v, "along the run", r.seed, m]); }
+  }
+  document.getElementById("shadowWrap").style.display = rows.length ? "" : "none"; if (!rows.length) return;
+  const g = {}; for (const [a, v, src, seed, m] of rows) { const k = [a, v, src].join("\u0001"); (g[k] = g[k] || []).push(m); }
+  const mean = (ms, k) => { const v = ms.map(m => m && m[k]).filter(x => x != null && isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : NaN; };
+  document.getElementById("shadow").innerHTML = "<tr><th>base arm</th><th style='text-align:left'>variant</th><th style='text-align:left'>scored on</th>" + keys.map(k => `<th>${PR[k].l}<span class="d">${PR[k].d}</span></th>`).join("") + "</tr>" +
+    Object.entries(g).map(([k, ms]) => { const [a, v, src] = k.split("\u0001"); return `<tr><td>${a}</td><td style='text-align:left'>${v}</td><td style='text-align:left'>${src}</td>` + keys.map(q => { const x = mean(ms, q); return `<td>${isFinite(x) ? x.toFixed(PR[q].f) : "–"}</td>`; }).join("") + "</tr>"; }).join("");
+}
+
+function quiz() {
+  const ent = D.pred.filter(p => p.quiz && p.quiz[st.output] && p.size === st.size && st.on.model.has(p.model));
+  document.getElementById("quizWrap").style.display = ent.length ? "" : "none"; if (!ent.length) return;
+  const a = [], b = [];
+  for (const m of uniq(ent.map(p => p.model))) { const es = ent.filter(p => p.model === m); const labs = es[0].quiz[st.output].map(q => q.quiz);
+    const avg = (key, f = x => x) => labs.map((_, i) => { const v = es.map(e => e.quiz[st.output][i][key]).filter(x => x != null); return v.length ? f(v) : null; });
+    const gm = v => Math.exp(v.reduce((s, x) => s + Math.log(x), 0) / v.length), am = v => v.reduce((s, x) => s + x, 0) / v.length;
+    const phi = avg("phi", gm), lo = avg("phi_lo", v => Math.min(...v)), hi = avg("phi_hi", v => Math.max(...v)); const col = PAL[levels.model.indexOf(m) % PAL.length];
+    a.push({x: labs, y: phi, name: sh(m), mode: "lines+markers", line: {color: col}, marker: {size: 8, color: col}, error_y: {type: "data", symmetric: false, array: hi.map((h, i) => h - phi[i]), arrayminus: phi.map((p, i) => p - lo[i]), color: col, thickness: 1}});
+    b.push({x: labs, y: avg("excess", am), name: sh(m), mode: "lines+markers", line: {color: col}, marker: {size: 8, color: col}}); }
+  Plotly.react("pQ1", a, lay({title: {text: "Fitted φ by quiz size", font: {size: 13}}, yaxis: {title: "φ (log scale)", type: "log", gridcolor: css("--grid")}, xaxis: {gridcolor: css("--grid")}}), pc);
+  Plotly.react("pQ2", b, lay({title: {text: "Log score − entropy floor by quiz size", font: {size: 13}}, yaxis: {title: PR.excess.l, gridcolor: css("--grid")}, xaxis: {gridcolor: css("--grid")}}), pc);
+}
+
+function selects() {
+  fill("s_output", D.outputs.map(o => [o.name, o.label + (o.kind === "binomial" ? " (counts)" : "")]), st.output).onchange = e => { st.output = e.target.value; selects(); render(); };
+  const src = [["traj", "one-step-ahead along each BO run"]]; if (D.pred.length) src.push(["fixed", "fixed data, no acquisition"]);
+  fill("s_source", src, st.source).onchange = e => { st.source = e.target.value; selects(); render(); };
+  const sz = fill("s_size", sizes.map(s => [s, s + " training points"]), st.size); sz.style.display = st.source === "fixed" ? "" : "none"; sz.onchange = e => { st.size = +e.target.value; render(); };
+  const rg = fill("s_region", regions.map(r => [r, {all: "all test points", near_optimum: "test points near the optimum", global_: "test points across the whole domain"}[r] || r]), st.region); rg.style.display = st.source === "fixed" && regions.length > 1 ? "" : "none"; rg.onchange = e => { st.region = e.target.value; render(); };
+  fill("s_color", [["arm", "yield arm"], ["model", "model"], ["context", "context"], ["acq", "acquisition"], ["arm+model", "model + yield arm"]], st.color).onchange = e => { st.color = e.target.value; render(); };
+  const cv = [["best", D.objective_label], ["regret", "Regret (log scale)"], ["cost", "Best true cost"], ["true_yield", "True yield of each evaluated point"], ["violation", "Constraint violation of each evaluated point"]].filter(c => D.runs.some(r => r.curves[c[0]] && r.curves[c[0]].length));
+  if (!cv.find(c => c[0] === st.curve) && cv.length) st.curve = cv[0][0];
+  fill("s_curve", cv, st.curve).onchange = e => { st.curve = e.target.value; curves(); };
+  const bo = Object.keys(BO).filter(k => D.runs.some(r => value(r, k) != null)), pr = prKeys();
+  if (!bo.includes(st.bar) && !pr.includes(st.bar)) st.bar = bo[0] || pr[0];
+  fill("s_bar", bo.map(k => [k, "BO · " + BO[k].l]).concat(pr.map(k => [k, GROUPS[PR[k].g] + " · " + PR[k].l])), st.bar).onchange = e => { st.bar = e.target.value; bars(); };
+  if (!pr.includes(st.sx)) st.sx = pr[0]; if (!bo.includes(st.sy)) st.sy = bo[0];
+  fill("s_sx", pr.map(k => [k, PR[k].l]), st.sx).onchange = e => { st.sx = e.target.value; scatter(); };
+  fill("s_sy", bo.map(k => [k, BO[k].l]), st.sy).onchange = e => { st.sy = e.target.value; scatter(); };
+}
+function render() { controls(); board(); curves(); bars(); confidence(); scatter(); shadow(); quiz(); }
+
+document.getElementById("title").textContent = "BO benchmark · " + D.problem;
+const done = D.runs.filter(r => r.done).length;
+document.getElementById("meta").textContent = `${done} of ${D.planned} planned runs complete (${D.runs.length} started) · ${D.n_iter ?? "?"} evaluations per run · seeds ${uniq(D.runs.map(r => r.seed)).join(", ")} · generated ${D.generated}`;
+const ban = document.getElementById("banner");
+if (D.standin) ban.append(el("div", {class: "warn"}, "These runs used the CPU stand-in model, not Kumo or Causilo. The numbers only show that the pipeline works."));
+if (done < D.planned) ban.append(el("div", {class: "warn"}, `Partial results: ${D.planned - done} runs are unfinished or not started. Unfinished runs are marked with their progress in the leaderboard, and "evaluations to reach" is blank for them until they finish.`));
+const G = document.getElementById("gloss"); for (const M of Object.values(BO).concat(Object.values(PR))) { G.append(el("dt", {}, M.l)); G.append(el("dd", {}, M.desc)); }
+document.getElementById("settings").textContent = JSON.stringify({settings: D.settings, reference: D.reference}, null, 1);
+selects(); render();
+</script>
+</body>
+</html>
