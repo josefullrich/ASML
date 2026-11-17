@@ -25,11 +25,21 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--n", type=int, default=60)
     parser.add_argument("--n-test", type=int, default=2000)
-    parser.add_argument("--warmup", type=int, default=90)
+    parser.add_argument("--warmup", type=int, default=90,
+                        help="maximum initial observations to forget; 0 retains all history")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--source-seed", type=int, default=0)
     parser.add_argument("--dy-model", type=int, choices=(0, 1, 2), default=1)
     parser.add_argument("--cost-option", type=int, choices=(0, 1, 2), default=2)
+    parser.add_argument("--euv-model", choices=("gp", "kumo"), default="gp",
+                        help="EUV backend; --surrogate-scope all extends Kumo to all responses")
+    parser.add_argument("--surrogate-scope", choices=("euv", "all"), default="euv",
+                        help="all: replace all five responses when euv-model is kumo")
+    parser.add_argument("--kumo-size", choices=("small", "medium", "large"), default="small")
+    parser.add_argument("--kumo-device", choices=("cpu", "cuda"), default="cpu")
+    parser.add_argument("--kumo-estimators", type=int, default=4)
+    parser.add_argument("--kumo-batch-size", type=int, default=256)
+    parser.add_argument("--kumo-checkpoint", help="local Kumo state_dict; omit for pretrained weights")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     started = datetime.now(timezone.utc)
@@ -42,6 +52,10 @@ def main() -> None:
             args.n, warmup=args.warmup, n_test=args.n_test, seed=args.seed,
             source_seed=args.source_seed, dy_model=args.dy_model,
             cost_option=args.cost_option,
+            euv_model=args.euv_model, kumo_size=args.kumo_size,
+            surrogate_scope=args.surrogate_scope,
+            kumo_device=args.kumo_device, kumo_estimators=args.kumo_estimators,
+            kumo_batch_size=args.kumo_batch_size, kumo_checkpoint=args.kumo_checkpoint,
         )
     elapsed = time.perf_counter() - begin
     settings = ["x", "y", "z", "e", "d", "p", "k", "b", "dose_target_mJ"]
@@ -99,8 +113,10 @@ def main() -> None:
         if first.size:
             ax.axvline(first[0] + .5, color="k", ls=":", alpha=.5)
     axes[0].set_title("Dotted line: first optimizer-selected measurement", fontsize=10)
-    fig.suptitle(f"EUV optimization smoke run | {args.n} measurements | logit GP" if args.dy_model == 1
-                 else f"EUV optimization smoke run | {args.n} measurements | yield model {args.dy_model}")
+    full_kumo = args.euv_model == "kumo" and args.surrogate_scope == "all"
+    yield_label = "Kumo logit regression" if full_kumo else ("logit GP" if args.dy_model == 1 else f"model {args.dy_model}")
+    fig.suptitle(f"EUV optimization smoke run | {args.n} measurements | "
+                 f"EUV: {args.euv_model} | shape: {'kumo' if full_kumo else 'gp'} | yield: {yield_label}")
     fig.savefig(output / "overview.png", dpi=160)
     plt.close(fig)
 
@@ -119,9 +135,19 @@ def main() -> None:
         "source_drift_reset_after_each_measurement": True,
         "hardware": {"platform": platform.platform(), "machine": platform.machine(), "processor": platform.processor()},
         "python": platform.python_version(),
-        "source_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest()
-                          for p in Path(__file__).resolve().parent.glob("*.py")},
+        "source_sha256": {p.relative_to(Path(__file__).resolve().parent).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                          for p in Path(__file__).resolve().parent.rglob("*.py")},
         "packages": {p: version(p) for p in ("numpy", "scipy", "scikit-learn", "matplotlib", "pandas", "statsmodels")},
+        "response_models": {"euv": result.euv_model, "shape": "kumo" if full_kumo else "gp",
+                            "yield": "kumo_logit" if full_kumo else f"yield_option_{args.dy_model}"},
+        "yield_uncertainty": ("Kumo quantiles of clipped-logit yield transformed to probabilities; "
+                              "not a calibrated binomial interval" if full_kumo else "Existing yield model intervals"),
+        "retained_history": "all" if args.warmup == 0 else f"forget up to {args.warmup} initial measurements",
+        "euv_uncertainty": (
+            "Kumo median; normal-equivalent scale = (q975-q025)/(2*normal_ppf(0.975)); "
+            "approximate expected improvement, not calibrated GP posterior uncertainty"
+            if args.euv_model == "kumo" else "GP predictive mean and standard deviation"
+        ),
         "optimizer_selected_measurements": int(chosen.sum()),
         "shape_feasible_measurements": int(shape.sum()),
         "shape_and_observed_yield_feasible_measurements": int(frame.shape_and_observed_yield_feasible.sum()),
@@ -133,8 +159,20 @@ def main() -> None:
         "limitations": ["Small execution check, not evidence of superiority over random search.",
                         "Yield is a soft objective penalty in the supplied optimizer.",
                         "Final-model predictions are retrospective, not held-out accuracy.",
-                        "MATLAB equivalence and foundation models have not been evaluated."],
+                        "MATLAB equivalence and comparative optimization performance have not been established."],
     }
+    if args.euv_model == "kumo":
+        # A run of <=27 measurements may not load Kumo at all.
+        summary["kumo_used"] = result.kumo_used
+        summary["kumo_weights"] = "checkpoint" if args.kumo_checkpoint else "pretrained"
+        if args.kumo_checkpoint:
+            digest = hashlib.sha256()
+            with Path(args.kumo_checkpoint).open("rb") as checkpoint_file:
+                for chunk in iter(lambda: checkpoint_file.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            summary["kumo_checkpoint_sha256"] = digest.hexdigest()
+        if summary["kumo_used"]:
+            summary["packages"].update({p: version(p) for p in ("structured-data-models", "torch")})
     (output / "summary.json").write_text(json.dumps(summary, indent=2, allow_nan=False) + "\n")
     print(json.dumps({"output": str(output), "elapsed_seconds": elapsed,
                       "optimizer_selected_measurements": int(chosen.sum()),
