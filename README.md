@@ -2,8 +2,7 @@
 
 This project explores ways to maximize EUV output while maintaining a die yield
 of at least 99.5%. We use a simulated EUV source to test optimization methods,
-starting with a Gaussian-process baseline and later comparing foundation models.
-The current baseline uses a yield penalty; a hard yield constraint is still to be added.
+trying to beat a Gaussian Process baseline with a Tabular Foundation Model approach. 
 
 ## Folder guide
 
